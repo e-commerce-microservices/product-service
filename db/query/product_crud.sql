@@ -1,0 +1,4 @@
+-- name: CreateProduct :one
+INSERT INTO product (name, description, price, thumbnail, inventory, supplier_id, category_id)
+VALUES ($1,$2,$3,$4,$5,$6,$7)
+RETURNING *;
