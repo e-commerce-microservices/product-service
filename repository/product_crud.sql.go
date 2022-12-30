@@ -49,3 +49,61 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 	)
 	return i, err
 }
+
+const getAllProduct = `-- name: GetAllProduct :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product
+`
+
+func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getAllProduct)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductByID = `-- name: GetProductByID :one
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product WHERE id = $1
+`
+
+func (q *Queries) GetProductByID(ctx context.Context, id int64) (Product, error) {
+	row := q.db.QueryRowContext(ctx, getProductByID, id)
+	var i Product
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.Price,
+		&i.Thumbnail,
+		&i.Inventory,
+		&i.SupplierID,
+		&i.CategoryID,
+		&i.CreatedAt,
+	)
+	return i, err
+}

@@ -42,7 +42,7 @@ func main() {
 	queries := repository.New(productDB)
 
 	// dial auth client
-	authServiceConn, err := grpc.Dial("localhost:8081", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	authServiceConn, err := grpc.Dial("auth-service:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal("can't dial user service: ", err)
 	}
@@ -58,7 +58,7 @@ func main() {
 	reflection.Register(grpcServer)
 
 	// listen and serve
-	listener, err := net.Listen("tcp", "localhost:8083")
+	listener, err := net.Listen("tcp", ":8080")
 	if err != nil {
 		log.Fatal("cannot create listener: ", err)
 	}

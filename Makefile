@@ -12,13 +12,8 @@ migratedown:
 migrateforce:
 	migrate -path db/migration -database "${DB_DSN}" -verbose force ${v}
 
-protogen_auth:
-	protoc --proto_path=proto proto/auth_service.proto proto/general.proto \
-	--go_out=pb --go_opt=paths=source_relative \
-	--go-grpc_out=pb --go-grpc_opt=paths=source_relative
-
-protogen_product:
-	protoc --proto_path=proto proto/product_service.proto proto/general.proto \
+protogen:
+	protoc --proto_path=proto proto/product_service.proto proto/general.proto proto/auth_service.proto \
 	--go_out=pb --go_opt=paths=source_relative \
 	--go-grpc_out=pb --go-grpc_opt=paths=source_relative
 

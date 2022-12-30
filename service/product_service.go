@@ -2,18 +2,26 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"strconv"
 
 	"github.com/e-commerce-microservices/product-service/pb"
 	"github.com/e-commerce-microservices/product-service/repository"
+	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type productRepository interface{}
+type productRepository interface {
+	CreateProduct(ctx context.Context, arg repository.CreateProductParams) (repository.Product, error)
+	GetProductByID(ctx context.Context, id int64) (repository.Product, error)
+	GetAllProduct(ctx context.Context) ([]repository.Product, error)
+}
 type categoryRepository interface {
 	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
+	GetAllCategory(ctx context.Context) ([]repository.Category, error)
 }
 
 // ProductService implement grpc Server
@@ -41,12 +49,9 @@ func (service *ProductService) CreateCategory(ctx context.Context, req *pb.Creat
 	md, _ := metadata.FromIncomingContext(ctx)
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	userClaimsResp, err := service.authClient.GetUserClaims(ctx, &emptypb.Empty{})
+	_, err := service.authClient.AdminAuthorization(ctx, &empty.Empty{})
 	if err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
-	}
-	if userClaimsResp.GetUserRole() != pb.UserRole_admin {
-		return nil, status.Error(codes.PermissionDenied, "permission denied to create category")
+		return nil, status.Error(codes.PermissionDenied, err.Error())
 	}
 
 	err = service.categoryStore.CreateCategory(ctx, repository.CreateCategoryParams{
@@ -64,5 +69,111 @@ func (service *ProductService) CreateCategory(ctx context.Context, req *pb.Creat
 
 // CreateProduct ...
 func (service *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.CreateProductResponse, error) {
-	return nil, nil
+	md, _ := metadata.FromIncomingContext(ctx)
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	claims, err := service.authClient.SupplierAuthorization(ctx, &empty.Empty{})
+	if err != nil {
+		return nil, status.Error(codes.PermissionDenied, err.Error())
+	}
+
+	supplierID, err := strconv.ParseInt(claims.GetId(), 10, 64)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	newProduct, err := service.productStore.CreateProduct(ctx, repository.CreateProductParams{
+		Name:        req.GetProductName(),
+		Description: req.GetDesc(),
+		Price:       fmt.Sprint(req.GetPrice()),
+		Thumbnail:   req.GetThumbnail(),
+		Inventory:   int32(req.GetInventory()),
+		SupplierID:  supplierID,
+		CategoryID:  req.GetCategoryId(),
+	})
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.CreateProductResponse{
+		NewProduct: &pb.Product{
+			SupplierId: supplierID,
+			CategoryId: newProduct.CategoryID,
+			Name:       newProduct.Name,
+			Desc:       newProduct.Description,
+			Price:      0,
+			Thumbnail:  newProduct.Thumbnail,
+			Inventory:  0,
+			CreatedAt:  &timestamppb.Timestamp{},
+			UpdatedAt:  &timestamppb.Timestamp{},
+		},
+	}, nil
+}
+
+// GetProduct ...
+func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProductRequest) (*pb.Product, error) {
+	product, err := service.productStore.GetProductByID(ctx, req.GetProductId())
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return &pb.Product{
+		SupplierId: product.SupplierID,
+		CategoryId: product.CategoryID,
+		Name:       product.Name,
+		Desc:       product.Description,
+		Price:      0,
+		Thumbnail:  product.Thumbnail,
+		Inventory:  product.Inventory,
+		CreatedAt:  &timestamppb.Timestamp{},
+		UpdatedAt:  &timestamppb.Timestamp{},
+	}, nil
+}
+
+// GetListProduct ...
+func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetListProductRequest) (*pb.GetListProductResponse, error) {
+	listProduct, err := service.productStore.GetAllProduct(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	result := make([]*pb.Product, 0, len(listProduct))
+	for _, product := range listProduct {
+		result = append(result, &pb.Product{
+			SupplierId: product.SupplierID,
+			CategoryId: product.CategoryID,
+			Name:       product.Name,
+			Desc:       product.Description,
+			Price:      0,
+			Thumbnail:  product.Thumbnail,
+			Inventory:  product.Inventory,
+			CreatedAt:  &timestamppb.Timestamp{},
+			UpdatedAt:  &timestamppb.Timestamp{},
+		})
+	}
+
+	return &pb.GetListProductResponse{
+		ListProduct: result,
+	}, nil
+}
+
+// GetListCategory ...
+func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Empty) (*pb.GetListCategoryResponse, error) {
+	listCategory, err := service.categoryStore.GetAllCategory(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	result := make([]*pb.Category, 0, len(listCategory))
+	for _, category := range listCategory {
+		result = append(result, &pb.Category{
+			CategoryId: category.ID,
+			Name:       category.Name,
+		})
+	}
+
+	return &pb.GetListCategoryResponse{
+		ListCategory: result,
+	}, nil
 }
