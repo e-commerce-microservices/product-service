@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ProductServiceClient interface {
+	Ping(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Pong, error)
 	CreateProduct(ctx context.Context, in *CreateProductRequest, opts ...grpc.CallOption) (*CreateProductResponse, error)
 	GetProduct(ctx context.Context, in *GetProductRequest, opts ...grpc.CallOption) (*Product, error)
 	GetListProduct(ctx context.Context, in *GetListProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
@@ -38,9 +39,18 @@ func NewProductServiceClient(cc grpc.ClientConnInterface) ProductServiceClient {
 	return &productServiceClient{cc}
 }
 
+func (c *productServiceClient) Ping(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*Pong, error) {
+	out := new(Pong)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/Ping", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *productServiceClient) CreateProduct(ctx context.Context, in *CreateProductRequest, opts ...grpc.CallOption) (*CreateProductResponse, error) {
 	out := new(CreateProductResponse)
-	err := c.cc.Invoke(ctx, "/proto.ProductService/CreateProduct", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/CreateProduct", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +59,7 @@ func (c *productServiceClient) CreateProduct(ctx context.Context, in *CreateProd
 
 func (c *productServiceClient) GetProduct(ctx context.Context, in *GetProductRequest, opts ...grpc.CallOption) (*Product, error) {
 	out := new(Product)
-	err := c.cc.Invoke(ctx, "/proto.ProductService/GetProduct", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetProduct", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +68,7 @@ func (c *productServiceClient) GetProduct(ctx context.Context, in *GetProductReq
 
 func (c *productServiceClient) GetListProduct(ctx context.Context, in *GetListProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error) {
 	out := new(GetListProductResponse)
-	err := c.cc.Invoke(ctx, "/proto.ProductService/GetListProduct", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetListProduct", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +77,7 @@ func (c *productServiceClient) GetListProduct(ctx context.Context, in *GetListPr
 
 func (c *productServiceClient) CreateCategory(ctx context.Context, in *CreateCategoryRequest, opts ...grpc.CallOption) (*GeneralResponse, error) {
 	out := new(GeneralResponse)
-	err := c.cc.Invoke(ctx, "/proto.ProductService/CreateCategory", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/CreateCategory", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +86,7 @@ func (c *productServiceClient) CreateCategory(ctx context.Context, in *CreateCat
 
 func (c *productServiceClient) GetListCategory(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetListCategoryResponse, error) {
 	out := new(GetListCategoryResponse)
-	err := c.cc.Invoke(ctx, "/proto.ProductService/GetListCategory", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetListCategory", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,6 +97,7 @@ func (c *productServiceClient) GetListCategory(ctx context.Context, in *empty.Em
 // All implementations must embed UnimplementedProductServiceServer
 // for forward compatibility
 type ProductServiceServer interface {
+	Ping(context.Context, *empty.Empty) (*Pong, error)
 	CreateProduct(context.Context, *CreateProductRequest) (*CreateProductResponse, error)
 	GetProduct(context.Context, *GetProductRequest) (*Product, error)
 	GetListProduct(context.Context, *GetListProductRequest) (*GetListProductResponse, error)
@@ -99,6 +110,9 @@ type ProductServiceServer interface {
 type UnimplementedProductServiceServer struct {
 }
 
+func (UnimplementedProductServiceServer) Ping(context.Context, *empty.Empty) (*Pong, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
 func (UnimplementedProductServiceServer) CreateProduct(context.Context, *CreateProductRequest) (*CreateProductResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateProduct not implemented")
 }
@@ -127,6 +141,24 @@ func RegisterProductServiceServer(s grpc.ServiceRegistrar, srv ProductServiceSer
 	s.RegisterService(&ProductService_ServiceDesc, srv)
 }
 
+func _ProductService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(empty.Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).Ping(ctx, req.(*empty.Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProductService_CreateProduct_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateProductRequest)
 	if err := dec(in); err != nil {
@@ -137,7 +169,7 @@ func _ProductService_CreateProduct_Handler(srv interface{}, ctx context.Context,
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ProductService/CreateProduct",
+		FullMethod: "/ecommerce.ProductService/CreateProduct",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).CreateProduct(ctx, req.(*CreateProductRequest))
@@ -155,7 +187,7 @@ func _ProductService_GetProduct_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ProductService/GetProduct",
+		FullMethod: "/ecommerce.ProductService/GetProduct",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).GetProduct(ctx, req.(*GetProductRequest))
@@ -173,7 +205,7 @@ func _ProductService_GetListProduct_Handler(srv interface{}, ctx context.Context
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ProductService/GetListProduct",
+		FullMethod: "/ecommerce.ProductService/GetListProduct",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).GetListProduct(ctx, req.(*GetListProductRequest))
@@ -191,7 +223,7 @@ func _ProductService_CreateCategory_Handler(srv interface{}, ctx context.Context
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ProductService/CreateCategory",
+		FullMethod: "/ecommerce.ProductService/CreateCategory",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).CreateCategory(ctx, req.(*CreateCategoryRequest))
@@ -209,7 +241,7 @@ func _ProductService_GetListCategory_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/proto.ProductService/GetListCategory",
+		FullMethod: "/ecommerce.ProductService/GetListCategory",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).GetListCategory(ctx, req.(*empty.Empty))
@@ -221,9 +253,13 @@ func _ProductService_GetListCategory_Handler(srv interface{}, ctx context.Contex
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ProductService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "proto.ProductService",
+	ServiceName: "ecommerce.ProductService",
 	HandlerType: (*ProductServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Ping",
+			Handler:    _ProductService_Ping_Handler,
+		},
 		{
 			MethodName: "CreateProduct",
 			Handler:    _ProductService_CreateProduct_Handler,

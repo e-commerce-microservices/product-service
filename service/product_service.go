@@ -177,3 +177,10 @@ func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Emp
 		ListCategory: result,
 	}, nil
 }
+
+// Ping pong
+func (service *ProductService) Ping(context.Context, *empty.Empty) (*pb.Pong, error) {
+	return &pb.Pong{
+		Message: "pong",
+	}, nil
+}

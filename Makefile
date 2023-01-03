@@ -20,4 +20,13 @@ protogen:
 sqlcgen:
 	sqlc generate
 
+.PHONY: dockerbp
+dockerbp:
+	docker build -t ngoctd/ecommerce-product:latest . && \
+	docker push ngoctd/ecommerce-product
+
+.PHONY: redeploy
+redeploy:
+	kubectl rollout restart deployment depl-product
+
 .PHONY: migratecreate migrateup migratedown migrateforce protogen_auth protogen_product sqlcgen
