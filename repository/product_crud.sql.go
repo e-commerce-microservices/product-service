@@ -18,7 +18,7 @@ RETURNING id, name, description, price, thumbnail, inventory, supplier_id, categ
 type CreateProductParams struct {
 	Name        string
 	Description string
-	Price       string
+	Price       int64
 	Thumbnail   string
 	Inventory   int32
 	SupplierID  int64
@@ -56,6 +56,43 @@ SELECT id, name, description, price, thumbnail, inventory, supplier_id, category
 
 func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
 	rows, err := q.db.QueryContext(ctx, getAllProduct)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductByCategory = `-- name: GetProductByCategory :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product WHERE category_id = $1
+`
+
+func (q *Queries) GetProductByCategory(ctx context.Context, categoryID int64) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductByCategory, categoryID)
 	if err != nil {
 		return nil, err
 	}

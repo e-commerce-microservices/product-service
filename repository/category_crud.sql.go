@@ -7,25 +7,27 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createCategory = `-- name: CreateCategory :exec
-INSERT INTO category ("id", "name") 
-VALUES ($1, $2)
+INSERT INTO category ("id", "name", "thumbnail") 
+VALUES ($1, $2, $3)
 `
 
 type CreateCategoryParams struct {
-	ID   int64
-	Name string
+	ID        int64
+	Name      string
+	Thumbnail sql.NullString
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) error {
-	_, err := q.db.ExecContext(ctx, createCategory, arg.ID, arg.Name)
+	_, err := q.db.ExecContext(ctx, createCategory, arg.ID, arg.Name, arg.Thumbnail)
 	return err
 }
 
 const getAllCategory = `-- name: GetAllCategory :many
-SELECT id, name, created_at FROM category
+SELECT id, name, created_at, thumbnail FROM category
 `
 
 func (q *Queries) GetAllCategory(ctx context.Context) ([]Category, error) {
@@ -37,7 +39,12 @@ func (q *Queries) GetAllCategory(ctx context.Context) ([]Category, error) {
 	var items []Category
 	for rows.Next() {
 		var i Category
-		if err := rows.Scan(&i.ID, &i.Name, &i.CreatedAt); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.Thumbnail,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

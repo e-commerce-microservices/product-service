@@ -9,3 +9,6 @@ SELECT * FROM product WHERE id = $1;
 
 -- name: GetAllProduct :many
 SELECT * FROM product;
+
+-- name: GetProductByCategory :many
+SELECT * FROM product WHERE category_id = $1;

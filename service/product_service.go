@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
 	"strconv"
 
 	"github.com/e-commerce-microservices/product-service/pb"
@@ -18,6 +18,7 @@ type productRepository interface {
 	CreateProduct(ctx context.Context, arg repository.CreateProductParams) (repository.Product, error)
 	GetProductByID(ctx context.Context, id int64) (repository.Product, error)
 	GetAllProduct(ctx context.Context) ([]repository.Product, error)
+	GetProductByCategory(ctx context.Context, categoryID int64) ([]repository.Product, error)
 }
 type categoryRepository interface {
 	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
@@ -57,6 +58,10 @@ func (service *ProductService) CreateCategory(ctx context.Context, req *pb.Creat
 	err = service.categoryStore.CreateCategory(ctx, repository.CreateCategoryParams{
 		ID:   req.GetCategoryId(),
 		Name: req.GetName(),
+		Thumbnail: sql.NullString{
+			String: req.GetThumbnail(),
+			Valid:  true,
+		},
 	})
 	if err != nil {
 		return nil, status.Error(codes.Canceled, err.Error())
@@ -64,6 +69,27 @@ func (service *ProductService) CreateCategory(ctx context.Context, req *pb.Creat
 
 	return &pb.GeneralResponse{
 		Message: "create new category successfull",
+	}, nil
+}
+
+// GetListCategory ...
+func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Empty) (*pb.GetListCategoryResponse, error) {
+	listCategory, err := service.categoryStore.GetAllCategory(ctx)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	result := make([]*pb.Category, 0, len(listCategory))
+	for _, category := range listCategory {
+		result = append(result, &pb.Category{
+			CategoryId: category.ID,
+			Name:       category.Name,
+			Thumbnail:  category.Thumbnail.String,
+		})
+	}
+
+	return &pb.GetListCategoryResponse{
+		ListCategory: result,
 	}, nil
 }
 
@@ -85,7 +111,7 @@ func (service *ProductService) CreateProduct(ctx context.Context, req *pb.Create
 	newProduct, err := service.productStore.CreateProduct(ctx, repository.CreateProductParams{
 		Name:        req.GetProductName(),
 		Description: req.GetDesc(),
-		Price:       fmt.Sprint(req.GetPrice()),
+		Price:       req.GetPrice(),
 		Thumbnail:   req.GetThumbnail(),
 		Inventory:   int32(req.GetInventory()),
 		SupplierID:  supplierID,
@@ -133,9 +159,19 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 
 // GetListProduct ...
 func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetListProductRequest) (*pb.GetListProductResponse, error) {
-	listProduct, err := service.productStore.GetAllProduct(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	var listProduct []repository.Product
+	var err error
+	if req.GetCategoryId() != 0 {
+		listProduct, err = service.productStore.GetProductByCategory(ctx, req.GetCategoryId())
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	} else {
+		listProduct, err = service.productStore.GetAllProduct(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
 	}
 
 	result := make([]*pb.Product, 0, len(listProduct))
@@ -148,33 +184,11 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 			Price:      0,
 			Thumbnail:  product.Thumbnail,
 			Inventory:  product.Inventory,
-			CreatedAt:  &timestamppb.Timestamp{},
-			UpdatedAt:  &timestamppb.Timestamp{},
 		})
 	}
 
 	return &pb.GetListProductResponse{
 		ListProduct: result,
-	}, nil
-}
-
-// GetListCategory ...
-func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Empty) (*pb.GetListCategoryResponse, error) {
-	listCategory, err := service.categoryStore.GetAllCategory(ctx)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	result := make([]*pb.Category, 0, len(listCategory))
-	for _, category := range listCategory {
-		result = append(result, &pb.Category{
-			CategoryId: category.ID,
-			Name:       category.Name,
-		})
-	}
-
-	return &pb.GetListCategoryResponse{
-		ListCategory: result,
 	}, nil
 }
 

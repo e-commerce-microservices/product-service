@@ -5,6 +5,7 @@
 package repository
 
 import (
+	"database/sql"
 	"time"
 )
 
@@ -12,13 +13,14 @@ type Category struct {
 	ID        int64
 	Name      string
 	CreatedAt time.Time
+	Thumbnail sql.NullString
 }
 
 type Product struct {
 	ID          int64
 	Name        string
 	Description string
-	Price       string
+	Price       int64
 	Thumbnail   string
 	Inventory   int32
 	SupplierID  int64
