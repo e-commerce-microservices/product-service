@@ -12,7 +12,7 @@ import (
 const createProduct = `-- name: CreateProduct :one
 INSERT INTO product (name, description, price, thumbnail, inventory, supplier_id, category_id)
 VALUES ($1,$2,$3,$4,$5,$6,$7)
-RETURNING id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at
+RETURNING id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand
 `
 
 type CreateProductParams struct {
@@ -46,12 +46,13 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 		&i.SupplierID,
 		&i.CategoryID,
 		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
 }
 
 const getAllProduct = `-- name: GetAllProduct :many
-SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product
 `
 
 func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
@@ -73,6 +74,7 @@ func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
 			&i.SupplierID,
 			&i.CategoryID,
 			&i.CreatedAt,
+			&i.Brand,
 		); err != nil {
 			return nil, err
 		}
@@ -88,7 +90,7 @@ func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
 }
 
 const getProductByCategory = `-- name: GetProductByCategory :many
-SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product WHERE category_id = $1
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE category_id = $1
 `
 
 func (q *Queries) GetProductByCategory(ctx context.Context, categoryID int64) ([]Product, error) {
@@ -110,6 +112,7 @@ func (q *Queries) GetProductByCategory(ctx context.Context, categoryID int64) ([
 			&i.SupplierID,
 			&i.CategoryID,
 			&i.CreatedAt,
+			&i.Brand,
 		); err != nil {
 			return nil, err
 		}
@@ -125,7 +128,7 @@ func (q *Queries) GetProductByCategory(ctx context.Context, categoryID int64) ([
 }
 
 const getProductByID = `-- name: GetProductByID :one
-SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at FROM product WHERE id = $1
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id = $1
 `
 
 func (q *Queries) GetProductByID(ctx context.Context, id int64) (Product, error) {
@@ -141,6 +144,50 @@ func (q *Queries) GetProductByID(ctx context.Context, id int64) (Product, error)
 		&i.SupplierID,
 		&i.CategoryID,
 		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
+}
+
+const getRecommendProduct = `-- name: GetRecommendProduct :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product LIMIT $1 OFFSET $2
+`
+
+type GetRecommendProductParams struct {
+	Limit  int32
+	Offset int32
+}
+
+func (q *Queries) GetRecommendProduct(ctx context.Context, arg GetRecommendProductParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getRecommendProduct, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

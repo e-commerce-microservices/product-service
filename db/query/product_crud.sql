@@ -12,3 +12,6 @@ SELECT * FROM product;
 
 -- name: GetProductByCategory :many
 SELECT * FROM product WHERE category_id = $1;
+
+-- name: GetRecommendProduct :many
+SELECT * FROM product LIMIT $1 OFFSET $2;

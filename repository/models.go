@@ -26,4 +26,5 @@ type Product struct {
 	SupplierID  int64
 	CategoryID  int64
 	CreatedAt   time.Time
+	Brand       sql.NullString
 }

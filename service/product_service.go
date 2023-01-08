@@ -19,6 +19,7 @@ type productRepository interface {
 	GetProductByID(ctx context.Context, id int64) (repository.Product, error)
 	GetAllProduct(ctx context.Context) ([]repository.Product, error)
 	GetProductByCategory(ctx context.Context, categoryID int64) ([]repository.Product, error)
+	GetRecommendProduct(ctx context.Context, arg repository.GetRecommendProductParams) ([]repository.Product, error)
 }
 type categoryRepository interface {
 	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
@@ -190,6 +191,36 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 
 	return &pb.GetListProductResponse{
 		ListProduct: result,
+	}, nil
+}
+
+// GetRecomendProduct ...
+func (service *ProductService) GetRecomendProduct(ctx context.Context, req *pb.GetRecommendProductRequest) (*pb.GetListProductResponse, error) {
+	listProductStore, err := service.productStore.GetRecommendProduct(ctx, repository.GetRecommendProductParams{
+		Limit:  req.GetLimit(),
+		Offset: req.GetOffset(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	listProduct := make([]*pb.Product, 0, len(listProductStore))
+	for _, product := range listProductStore {
+		listProduct = append(listProduct, &pb.Product{
+			SupplierId: product.SupplierID,
+			CategoryId: product.CategoryID,
+			Name:       product.Name,
+			Desc:       product.Description,
+			Price:      product.Price,
+			Thumbnail:  product.Thumbnail,
+			Inventory:  product.Inventory,
+			CreatedAt:  timestamppb.New(product.CreatedAt),
+			ProductId:  product.ID,
+			Brand:      product.Brand.String,
+		})
+	}
+
+	return &pb.GetListProductResponse{
+		ListProduct: listProduct,
 	}, nil
 }
 
