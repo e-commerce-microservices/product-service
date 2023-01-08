@@ -152,8 +152,7 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 		Price:      0,
 		Thumbnail:  product.Thumbnail,
 		Inventory:  product.Inventory,
-		CreatedAt:  &timestamppb.Timestamp{},
-		UpdatedAt:  &timestamppb.Timestamp{},
+		CreatedAt:  timestamppb.New(product.CreatedAt),
 	}, nil
 }
 
@@ -177,6 +176,7 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 	result := make([]*pb.Product, 0, len(listProduct))
 	for _, product := range listProduct {
 		result = append(result, &pb.Product{
+			ProductId:  product.ID,
 			SupplierId: product.SupplierID,
 			CategoryId: product.CategoryID,
 			Name:       product.Name,
@@ -184,6 +184,7 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 			Price:      product.Price,
 			Thumbnail:  product.Thumbnail,
 			Inventory:  product.Inventory,
+			CreatedAt:  timestamppb.New(product.CreatedAt),
 		})
 	}
 
