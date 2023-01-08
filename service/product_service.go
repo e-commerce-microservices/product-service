@@ -149,7 +149,7 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 		CategoryId: product.CategoryID,
 		Name:       product.Name,
 		Desc:       product.Description,
-		Price:      0,
+		Price:      product.Price,
 		Thumbnail:  product.Thumbnail,
 		Inventory:  product.Inventory,
 		CreatedAt:  timestamppb.New(product.CreatedAt),
