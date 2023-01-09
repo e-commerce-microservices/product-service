@@ -20,8 +20,8 @@ protogen:
 sqlcgen:
 	sqlc generate
 
-.PHONY: dockerbp
-dockerbp:
+.PHONY: rebuild
+rebuild:
 	docker build -t ngoctd/ecommerce-product:latest . && \
 	docker push ngoctd/ecommerce-product
 

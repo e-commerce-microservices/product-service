@@ -18,8 +18,9 @@ type productRepository interface {
 	CreateProduct(ctx context.Context, arg repository.CreateProductParams) (repository.Product, error)
 	GetProductByID(ctx context.Context, id int64) (repository.Product, error)
 	GetAllProduct(ctx context.Context) ([]repository.Product, error)
-	GetProductByCategory(ctx context.Context, categoryID int64) ([]repository.Product, error)
+	GetProductByCategory(ctx context.Context, arg repository.GetProductByCategoryParams) ([]repository.Product, error)
 	GetRecommendProduct(ctx context.Context, arg repository.GetRecommendProductParams) ([]repository.Product, error)
+	GetProductBySupplier(ctx context.Context, arg repository.GetProductBySupplierParams) ([]repository.Product, error)
 }
 type categoryRepository interface {
 	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
@@ -154,6 +155,7 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 		Thumbnail:  product.Thumbnail,
 		Inventory:  product.Inventory,
 		CreatedAt:  timestamppb.New(product.CreatedAt),
+		Brand:      product.Brand.String,
 	}, nil
 }
 
@@ -162,7 +164,11 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 	var listProduct []repository.Product
 	var err error
 	if req.GetCategoryId() != 0 {
-		listProduct, err = service.productStore.GetProductByCategory(ctx, req.GetCategoryId())
+		listProduct, err = service.productStore.GetProductByCategory(ctx, repository.GetProductByCategoryParams{
+			CategoryID: req.GetCategoryId(),
+			Limit:      req.GetLimit(),
+			Offset:     req.GetOffset(),
+		})
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -205,6 +211,38 @@ func (service *ProductService) GetRecomendProduct(ctx context.Context, req *pb.G
 	}
 	listProduct := make([]*pb.Product, 0, len(listProductStore))
 	for _, product := range listProductStore {
+		listProduct = append(listProduct, &pb.Product{
+			SupplierId: product.SupplierID,
+			CategoryId: product.CategoryID,
+			Name:       product.Name,
+			Desc:       product.Description,
+			Price:      product.Price,
+			Thumbnail:  product.Thumbnail,
+			Inventory:  product.Inventory,
+			CreatedAt:  timestamppb.New(product.CreatedAt),
+			ProductId:  product.ID,
+			Brand:      product.Brand.String,
+		})
+	}
+
+	return &pb.GetListProductResponse{
+		ListProduct: listProduct,
+	}, nil
+}
+
+// GetProductBySupplier ...
+func (service *ProductService) GetProductBySupplier(ctx context.Context, req *pb.GetProductBySupplierRequest) (*pb.GetListProductResponse, error) {
+	tmp, err := service.productStore.GetProductBySupplier(ctx, repository.GetProductBySupplierParams{
+		SupplierID: req.GetSupplierId(),
+		Limit:      req.GetLimit(),
+		Offset:     req.GetOffset(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	listProduct := make([]*pb.Product, 0, len(tmp))
+	for _, product := range tmp {
 		listProduct = append(listProduct, &pb.Product{
 			SupplierId: product.SupplierID,
 			CategoryId: product.CategoryID,
