@@ -244,3 +244,30 @@ func (q *Queries) GetRecommendProduct(ctx context.Context, arg GetRecommendProdu
 	}
 	return items, nil
 }
+
+const updateProduct = `-- name: UpdateProduct :exec
+UPDATE product
+SET name = $2, price = $3, inventory = $4, brand = $5
+WHERE id = $1 and supplier_id = $6
+`
+
+type UpdateProductParams struct {
+	ID         int64
+	Name       string
+	Price      int64
+	Inventory  int32
+	Brand      sql.NullString
+	SupplierID int64
+}
+
+func (q *Queries) UpdateProduct(ctx context.Context, arg UpdateProductParams) error {
+	_, err := q.db.ExecContext(ctx, updateProduct,
+		arg.ID,
+		arg.Name,
+		arg.Price,
+		arg.Inventory,
+		arg.Brand,
+		arg.SupplierID,
+	)
+	return err
+}

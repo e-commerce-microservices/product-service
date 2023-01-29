@@ -12,8 +12,6 @@ import (
 	"github.com/e-commerce-microservices/product-service/service"
 	"github.com/joho/godotenv"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/reflection"
 
 	// postgres driver
 	_ "github.com/lib/pq"
@@ -41,21 +39,18 @@ func main() {
 	// init queries
 	queries := repository.New(productDB)
 
-	// dial auth client
-	authServiceConn, err := grpc.Dial("auth-service:8080", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// dial image client
+	imageServiceConn, err := grpc.Dial("image-service:8080", grpc.WithInsecure())
 	if err != nil {
-		log.Fatal("can't dial user service: ", err)
+		log.Fatal("can't dial image service: ", err)
 	}
-	// create auth client
-	authClient := pb.NewAuthServiceClient(authServiceConn)
+	// create image client
+	imageClient := pb.NewImageServiceClient(imageServiceConn)
 
 	// create product service
-	productService := service.NewProductService(authClient, queries)
+	productService := service.NewProductService(imageClient, queries)
 	// register product service
 	pb.RegisterProductServiceServer(grpcServer, productService)
-
-	// reflection service
-	reflection.Register(grpcServer)
 
 	// listen and serve
 	listener, err := net.Listen("tcp", ":8080")

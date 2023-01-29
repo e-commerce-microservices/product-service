@@ -3,13 +3,14 @@ package service
 import (
 	"context"
 	"database/sql"
-	"strconv"
+	"encoding/base64"
+	"log"
+	"strings"
 
 	"github.com/e-commerce-microservices/product-service/pb"
 	"github.com/e-commerce-microservices/product-service/repository"
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -21,6 +22,7 @@ type productRepository interface {
 	GetProductByCategory(ctx context.Context, arg repository.GetProductByCategoryParams) ([]repository.Product, error)
 	GetRecommendProduct(ctx context.Context, arg repository.GetRecommendProductParams) ([]repository.Product, error)
 	GetProductBySupplier(ctx context.Context, arg repository.GetProductBySupplierParams) ([]repository.Product, error)
+	UpdateProduct(ctx context.Context, arg repository.UpdateProductParams) error
 }
 type categoryRepository interface {
 	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
@@ -29,19 +31,20 @@ type categoryRepository interface {
 
 // ProductService implement grpc Server
 type ProductService struct {
-	authClient    pb.AuthServiceClient
 	categoryStore categoryRepository
 	productStore  productRepository
+
+	imageClient pb.ImageServiceClient
 
 	pb.UnimplementedProductServiceServer
 }
 
 // NewProductService creates a new ProductService
-func NewProductService(authClient pb.AuthServiceClient, queries *repository.Queries) *ProductService {
+func NewProductService(imageClient pb.ImageServiceClient, queries *repository.Queries) *ProductService {
 	service := &ProductService{
-		authClient:    authClient,
 		categoryStore: queries,
 		productStore:  queries,
+		imageClient:   imageClient,
 	}
 
 	return service
@@ -49,15 +52,7 @@ func NewProductService(authClient pb.AuthServiceClient, queries *repository.Quer
 
 // CreateCategory creates a new Product Category
 func (service *ProductService) CreateCategory(ctx context.Context, req *pb.CreateCategoryRequest) (*pb.GeneralResponse, error) {
-	md, _ := metadata.FromIncomingContext(ctx)
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
-	_, err := service.authClient.AdminAuthorization(ctx, &empty.Empty{})
-	if err != nil {
-		return nil, status.Error(codes.PermissionDenied, err.Error())
-	}
-
-	err = service.categoryStore.CreateCategory(ctx, repository.CreateCategoryParams{
+	err := service.categoryStore.CreateCategory(ctx, repository.CreateCategoryParams{
 		ID:   req.GetCategoryId(),
 		Name: req.GetName(),
 		Thumbnail: sql.NullString{
@@ -97,26 +92,18 @@ func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Emp
 
 // CreateProduct ...
 func (service *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.CreateProductResponse, error) {
-	md, _ := metadata.FromIncomingContext(ctx)
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
-	claims, err := service.authClient.SupplierAuthorization(ctx, &empty.Empty{})
+	thumbnail, err := uploadImage(ctx, req.GetThumbnailDataChunk(), service.imageClient)
 	if err != nil {
-		return nil, status.Error(codes.PermissionDenied, err.Error())
+		return nil, err
 	}
 
-	supplierID, err := strconv.ParseInt(claims.GetId(), 10, 64)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-
-	newProduct, err := service.productStore.CreateProduct(ctx, repository.CreateProductParams{
+	_, err = service.productStore.CreateProduct(ctx, repository.CreateProductParams{
 		Name:        req.GetProductName(),
 		Description: req.GetDesc(),
 		Price:       req.GetPrice(),
-		Thumbnail:   req.GetThumbnail(),
+		Thumbnail:   thumbnail,
 		Inventory:   int32(req.GetInventory()),
-		SupplierID:  supplierID,
+		SupplierID:  req.GetSupplierId(),
 		CategoryID:  req.GetCategoryId(),
 	})
 
@@ -124,18 +111,10 @@ func (service *ProductService) CreateProduct(ctx context.Context, req *pb.Create
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	// add product into es
+
 	return &pb.CreateProductResponse{
-		NewProduct: &pb.Product{
-			SupplierId: supplierID,
-			CategoryId: newProduct.CategoryID,
-			Name:       newProduct.Name,
-			Desc:       newProduct.Description,
-			Price:      0,
-			Thumbnail:  newProduct.Thumbnail,
-			Inventory:  0,
-			CreatedAt:  &timestamppb.Timestamp{},
-			UpdatedAt:  &timestamppb.Timestamp{},
-		},
+		Message: "product is created",
 	}, nil
 }
 
@@ -262,9 +241,74 @@ func (service *ProductService) GetProductBySupplier(ctx context.Context, req *pb
 	}, nil
 }
 
+// UpdateProduct ...
+func (service *ProductService) UpdateProduct(ctx context.Context, req *pb.UpdateProductRequest) (*pb.GeneralResponse, error) {
+	err := service.productStore.UpdateProduct(ctx, repository.UpdateProductParams{
+		ID:        req.GetProductId(),
+		Name:      req.GetName(),
+		Price:     req.GetPrice(),
+		Inventory: int32(req.GetInventory()),
+		Brand: sql.NullString{
+			String: req.GetBrand(),
+			Valid:  false,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GeneralResponse{
+		Message: "Update product success",
+	}, nil
+}
+
 // Ping pong
 func (service *ProductService) Ping(context.Context, *empty.Empty) (*pb.Pong, error) {
 	return &pb.Pong{
 		Message: "pong",
 	}, nil
+}
+
+func toBytes(str string) []byte {
+	bytes, err := base64.StdEncoding.DecodeString(str)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return bytes
+}
+
+func uploadImage(ctx context.Context, dataChunk string, imageClient pb.ImageServiceClient) (string, error) {
+	// upload image
+	stream, err := imageClient.UploadImage(ctx)
+	if err != nil {
+		return "", err
+	}
+	// send mime type
+	tmp := strings.Split(dataChunk, "data:image/")
+	mimeType := strings.Split(tmp[1], ";")[0]
+	err = stream.Send(&pb.UploadImageRequest{
+		Data: &pb.UploadImageRequest_Info{
+			Info: &pb.ImageInfo{
+				ImageType: mimeType,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// send data
+	dataChunk = strings.Split(dataChunk, ",")[1]
+	stream.Send(&pb.UploadImageRequest{
+		Data: &pb.UploadImageRequest_ChunkData{
+			ChunkData: toBytes(dataChunk),
+		},
+	})
+
+	res, err := stream.CloseAndRecv()
+	if err != nil {
+		return "", err
+	}
+
+	return res.GetImageUrl(), nil
 }
