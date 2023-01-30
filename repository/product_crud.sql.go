@@ -11,9 +11,19 @@ import (
 )
 
 const createProduct = `-- name: CreateProduct :one
-INSERT INTO product (name, description, price, thumbnail, inventory, supplier_id, category_id, brand)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-RETURNING id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand
+
+INSERT INTO
+    product (
+        name,
+        description,
+        price,
+        thumbnail,
+        inventory,
+        supplier_id,
+        category_id,
+        brand
+    )
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand
 `
 
 type CreateProductParams struct {
@@ -55,6 +65,7 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 }
 
 const getAllProduct = `-- name: GetAllProduct :many
+
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product
 `
 
@@ -92,7 +103,47 @@ func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
 	return items, nil
 }
 
+const getListProductByIDs = `-- name: GetListProductByIDs :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN (pg.Array(?))
+`
+
+func (q *Queries) GetListProductByIDs(ctx context.Context, array interface{}) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getListProductByIDs, array)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getProductByCategory = `-- name: GetProductByCategory :many
+
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE category_id = $1 LIMIT $2 OFFSET $3
 `
 
@@ -137,6 +188,7 @@ func (q *Queries) GetProductByCategory(ctx context.Context, arg GetProductByCate
 }
 
 const getProductByID = `-- name: GetProductByID :one
+
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id = $1
 `
 
@@ -159,6 +211,7 @@ func (q *Queries) GetProductByID(ctx context.Context, id int64) (Product, error)
 }
 
 const getProductBySupplier = `-- name: GetProductBySupplier :many
+
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 LIMIT $2 OFFSET $3
 `
 
@@ -203,6 +256,7 @@ func (q *Queries) GetProductBySupplier(ctx context.Context, arg GetProductBySupp
 }
 
 const getRecommendProduct = `-- name: GetRecommendProduct :many
+
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product LIMIT $1 OFFSET $2
 `
 
@@ -246,8 +300,13 @@ func (q *Queries) GetRecommendProduct(ctx context.Context, arg GetRecommendProdu
 }
 
 const updateProduct = `-- name: UpdateProduct :exec
+
 UPDATE product
-SET name = $2, price = $3, inventory = $4, brand = $5
+SET
+    name = $2,
+    price = $3,
+    inventory = $4,
+    brand = $5
 WHERE id = $1 and supplier_id = $6
 `
 

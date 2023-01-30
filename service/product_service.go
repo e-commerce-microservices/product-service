@@ -15,24 +15,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type productRepository interface {
-	CreateProduct(ctx context.Context, arg repository.CreateProductParams) (repository.Product, error)
-	GetProductByID(ctx context.Context, id int64) (repository.Product, error)
-	GetAllProduct(ctx context.Context) ([]repository.Product, error)
-	GetProductByCategory(ctx context.Context, arg repository.GetProductByCategoryParams) ([]repository.Product, error)
-	GetRecommendProduct(ctx context.Context, arg repository.GetRecommendProductParams) ([]repository.Product, error)
-	GetProductBySupplier(ctx context.Context, arg repository.GetProductBySupplierParams) ([]repository.Product, error)
-	UpdateProduct(ctx context.Context, arg repository.UpdateProductParams) error
-}
-type categoryRepository interface {
-	CreateCategory(ctx context.Context, arg repository.CreateCategoryParams) error
-	GetAllCategory(ctx context.Context) ([]repository.Category, error)
-}
-
 // ProductService implement grpc Server
 type ProductService struct {
-	categoryStore categoryRepository
-	productStore  productRepository
+	productStore *repository.Queries
 
 	imageClient pb.ImageServiceClient
 
@@ -42,9 +27,8 @@ type ProductService struct {
 // NewProductService creates a new ProductService
 func NewProductService(imageClient pb.ImageServiceClient, queries *repository.Queries) *ProductService {
 	service := &ProductService{
-		categoryStore: queries,
-		productStore:  queries,
-		imageClient:   imageClient,
+		productStore: queries,
+		imageClient:  imageClient,
 	}
 
 	return service
@@ -52,7 +36,7 @@ func NewProductService(imageClient pb.ImageServiceClient, queries *repository.Qu
 
 // CreateCategory creates a new Product Category
 func (service *ProductService) CreateCategory(ctx context.Context, req *pb.CreateCategoryRequest) (*pb.GeneralResponse, error) {
-	err := service.categoryStore.CreateCategory(ctx, repository.CreateCategoryParams{
+	err := service.productStore.CreateCategory(ctx, repository.CreateCategoryParams{
 		ID:   req.GetCategoryId(),
 		Name: req.GetName(),
 		Thumbnail: sql.NullString{
@@ -71,7 +55,7 @@ func (service *ProductService) CreateCategory(ctx context.Context, req *pb.Creat
 
 // GetListCategory ...
 func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Empty) (*pb.GetListCategoryResponse, error) {
-	listCategory, err := service.categoryStore.GetAllCategory(ctx)
+	listCategory, err := service.productStore.GetAllCategory(ctx)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -259,6 +243,34 @@ func (service *ProductService) UpdateProduct(ctx context.Context, req *pb.Update
 
 	return &pb.GeneralResponse{
 		Message: "Update product success",
+	}, nil
+}
+
+// GetListProductByIDs ...
+func (service *ProductService) GetListProductByIDs(ctx context.Context, req *pb.GetListProductByIDsRequest) (*pb.GetListProductResponse, error) {
+	// listProduct
+	listProduct, err := service.productStore.GetListProductByIDs(ctx, req.GetListId())
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*pb.Product, 0, len(listProduct))
+	for _, product := range listProduct {
+		result = append(result, &pb.Product{
+			SupplierId: product.SupplierID,
+			CategoryId: product.CategoryID,
+			Name:       product.Name,
+			Price:      product.Price,
+			Thumbnail:  product.Thumbnail,
+			Inventory:  product.Inventory,
+			CreatedAt:  timestamppb.New(product.CreatedAt),
+			ProductId:  product.ID,
+			Brand:      product.Brand.String,
+		})
+	}
+
+	return &pb.GetListProductResponse{
+		ListProduct: result,
 	}, nil
 }
 

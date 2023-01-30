@@ -27,6 +27,7 @@ type ProductServiceClient interface {
 	CreateProduct(ctx context.Context, in *CreateProductRequest, opts ...grpc.CallOption) (*CreateProductResponse, error)
 	GetProduct(ctx context.Context, in *GetProductRequest, opts ...grpc.CallOption) (*Product, error)
 	GetListProduct(ctx context.Context, in *GetListProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
+	GetListProductByIDs(ctx context.Context, in *GetListProductByIDsRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	GetRecomendProduct(ctx context.Context, in *GetRecommendProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	GetProductBySupplier(ctx context.Context, in *GetProductBySupplierRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	UpdateProduct(ctx context.Context, in *UpdateProductRequest, opts ...grpc.CallOption) (*GeneralResponse, error)
@@ -72,6 +73,15 @@ func (c *productServiceClient) GetProduct(ctx context.Context, in *GetProductReq
 func (c *productServiceClient) GetListProduct(ctx context.Context, in *GetListProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error) {
 	out := new(GetListProductResponse)
 	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetListProduct", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *productServiceClient) GetListProductByIDs(ctx context.Context, in *GetListProductByIDsRequest, opts ...grpc.CallOption) (*GetListProductResponse, error) {
+	out := new(GetListProductResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetListProductByIDs", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +141,7 @@ type ProductServiceServer interface {
 	CreateProduct(context.Context, *CreateProductRequest) (*CreateProductResponse, error)
 	GetProduct(context.Context, *GetProductRequest) (*Product, error)
 	GetListProduct(context.Context, *GetListProductRequest) (*GetListProductResponse, error)
+	GetListProductByIDs(context.Context, *GetListProductByIDsRequest) (*GetListProductResponse, error)
 	GetRecomendProduct(context.Context, *GetRecommendProductRequest) (*GetListProductResponse, error)
 	GetProductBySupplier(context.Context, *GetProductBySupplierRequest) (*GetListProductResponse, error)
 	UpdateProduct(context.Context, *UpdateProductRequest) (*GeneralResponse, error)
@@ -154,6 +165,9 @@ func (UnimplementedProductServiceServer) GetProduct(context.Context, *GetProduct
 }
 func (UnimplementedProductServiceServer) GetListProduct(context.Context, *GetListProductRequest) (*GetListProductResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetListProduct not implemented")
+}
+func (UnimplementedProductServiceServer) GetListProductByIDs(context.Context, *GetListProductByIDsRequest) (*GetListProductResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetListProductByIDs not implemented")
 }
 func (UnimplementedProductServiceServer) GetRecomendProduct(context.Context, *GetRecommendProductRequest) (*GetListProductResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRecomendProduct not implemented")
@@ -251,6 +265,24 @@ func _ProductService_GetListProduct_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProductServiceServer).GetListProduct(ctx, req.(*GetListProductRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProductService_GetListProductByIDs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetListProductByIDsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).GetListProductByIDs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/GetListProductByIDs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).GetListProductByIDs(ctx, req.(*GetListProductByIDsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -367,6 +399,10 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetListProduct",
 			Handler:    _ProductService_GetListProduct_Handler,
+		},
+		{
+			MethodName: "GetListProductByIDs",
+			Handler:    _ProductService_GetListProductByIDs_Handler,
 		},
 		{
 			MethodName: "GetRecomendProduct",
