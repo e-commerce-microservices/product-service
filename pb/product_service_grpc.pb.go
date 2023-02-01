@@ -33,6 +33,8 @@ type ProductServiceClient interface {
 	UpdateProduct(ctx context.Context, in *UpdateProductRequest, opts ...grpc.CallOption) (*GeneralResponse, error)
 	CreateCategory(ctx context.Context, in *CreateCategoryRequest, opts ...grpc.CallOption) (*GeneralResponse, error)
 	GetListCategory(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetListCategoryResponse, error)
+	GetListProductInventory(ctx context.Context, in *GetInventoryRequest, opts ...grpc.CallOption) (*GetInventoryResponse, error)
+	DescInventory(ctx context.Context, in *DescInventoryRequest, opts ...grpc.CallOption) (*DescInventoryResponse, error)
 }
 
 type productServiceClient struct {
@@ -133,6 +135,24 @@ func (c *productServiceClient) GetListCategory(ctx context.Context, in *empty.Em
 	return out, nil
 }
 
+func (c *productServiceClient) GetListProductInventory(ctx context.Context, in *GetInventoryRequest, opts ...grpc.CallOption) (*GetInventoryResponse, error) {
+	out := new(GetInventoryResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetListProductInventory", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *productServiceClient) DescInventory(ctx context.Context, in *DescInventoryRequest, opts ...grpc.CallOption) (*DescInventoryResponse, error) {
+	out := new(DescInventoryResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/DescInventory", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProductServiceServer is the server API for ProductService service.
 // All implementations must embed UnimplementedProductServiceServer
 // for forward compatibility
@@ -147,6 +167,8 @@ type ProductServiceServer interface {
 	UpdateProduct(context.Context, *UpdateProductRequest) (*GeneralResponse, error)
 	CreateCategory(context.Context, *CreateCategoryRequest) (*GeneralResponse, error)
 	GetListCategory(context.Context, *empty.Empty) (*GetListCategoryResponse, error)
+	GetListProductInventory(context.Context, *GetInventoryRequest) (*GetInventoryResponse, error)
+	DescInventory(context.Context, *DescInventoryRequest) (*DescInventoryResponse, error)
 	mustEmbedUnimplementedProductServiceServer()
 }
 
@@ -183,6 +205,12 @@ func (UnimplementedProductServiceServer) CreateCategory(context.Context, *Create
 }
 func (UnimplementedProductServiceServer) GetListCategory(context.Context, *empty.Empty) (*GetListCategoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetListCategory not implemented")
+}
+func (UnimplementedProductServiceServer) GetListProductInventory(context.Context, *GetInventoryRequest) (*GetInventoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetListProductInventory not implemented")
+}
+func (UnimplementedProductServiceServer) DescInventory(context.Context, *DescInventoryRequest) (*DescInventoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DescInventory not implemented")
 }
 func (UnimplementedProductServiceServer) mustEmbedUnimplementedProductServiceServer() {}
 
@@ -377,6 +405,42 @@ func _ProductService_GetListCategory_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProductService_GetListProductInventory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInventoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).GetListProductInventory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/GetListProductInventory",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).GetListProductInventory(ctx, req.(*GetInventoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProductService_DescInventory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DescInventoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).DescInventory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/DescInventory",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).DescInventory(ctx, req.(*DescInventoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProductService_ServiceDesc is the grpc.ServiceDesc for ProductService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -423,6 +487,14 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetListCategory",
 			Handler:    _ProductService_GetListCategory_Handler,
+		},
+		{
+			MethodName: "GetListProductInventory",
+			Handler:    _ProductService_GetListProductInventory_Handler,
+		},
+		{
+			MethodName: "DescInventory",
+			Handler:    _ProductService_DescInventory_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

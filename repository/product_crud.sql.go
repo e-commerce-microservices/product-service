@@ -64,6 +64,23 @@ func (q *Queries) CreateProduct(ctx context.Context, arg CreateProductParams) (P
 	return i, err
 }
 
+const descInventory = `-- name: DescInventory :exec
+UPDATE product
+SET
+    inventory = inventory - $1
+WHERE id = $2 and inventory >= $1
+`
+
+type DescInventoryParams struct {
+	Inventory int32
+	ID        int64
+}
+
+func (q *Queries) DescInventory(ctx context.Context, arg DescInventoryParams) error {
+	_, err := q.db.ExecContext(ctx, descInventory, arg.Inventory, arg.ID)
+	return err
+}
+
 const getAllProduct = `-- name: GetAllProduct :many
 
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product
@@ -105,11 +122,11 @@ func (q *Queries) GetAllProduct(ctx context.Context) ([]Product, error) {
 
 const getListProductByIDs = `-- name: GetListProductByIDs :many
 
-SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN (pg.Array(?))
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN ($1)
 `
 
-func (q *Queries) GetListProductByIDs(ctx context.Context, array interface{}) ([]Product, error) {
-	rows, err := q.db.QueryContext(ctx, getListProductByIDs, array)
+func (q *Queries) GetListProductByIDs(ctx context.Context, id string) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, id)
 	if err != nil {
 		return nil, err
 	}

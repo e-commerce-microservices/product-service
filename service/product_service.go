@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"log"
+	"strconv"
 	"strings"
 
 	"github.com/e-commerce-microservices/product-service/pb"
@@ -32,6 +33,21 @@ func NewProductService(imageClient pb.ImageServiceClient, queries *repository.Qu
 	}
 
 	return service
+}
+
+// DescInventory ...
+func (service *ProductService) DescInventory(ctx context.Context, req *pb.DescInventoryRequest) (*pb.DescInventoryResponse, error) {
+	err := service.productStore.DescInventory(ctx, repository.DescInventoryParams{
+		Inventory: req.GetCount(),
+		ID:        req.GetProductId(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.DescInventoryResponse{
+		Message: "OK",
+	}, nil
 }
 
 // CreateCategory creates a new Product Category
@@ -248,8 +264,13 @@ func (service *ProductService) UpdateProduct(ctx context.Context, req *pb.Update
 
 // GetListProductByIDs ...
 func (service *ProductService) GetListProductByIDs(ctx context.Context, req *pb.GetListProductByIDsRequest) (*pb.GetListProductResponse, error) {
-	// listProduct
-	listProduct, err := service.productStore.GetListProductByIDs(ctx, req.GetListId())
+	ids := []string{}
+	for _, v := range req.GetListId() {
+		ids = append(ids, strconv.FormatInt(v, 10))
+	}
+	query := `	SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN ($1)`
+	query = strings.ReplaceAll(query, "$1", strings.Join(ids, ","))
+	listProduct, err := service.productStore.GetListProductByIDs(ctx, query)
 	if err != nil {
 		return nil, err
 	}

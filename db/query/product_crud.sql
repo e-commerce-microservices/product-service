@@ -45,4 +45,10 @@ WHERE id = $1 and supplier_id = $6;
 
 -- name: GetListProductByIDs :many
 
-SELECT * FROM product WHERE id IN (pg.Array(?));
+SELECT * FROM product WHERE id IN ($1);
+
+-- name: DescInventory :exec
+UPDATE product
+SET
+    inventory = inventory - $1
+WHERE id = $2 and inventory >= $1;
