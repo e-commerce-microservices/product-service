@@ -29,12 +29,15 @@ type ProductServiceClient interface {
 	GetListProduct(ctx context.Context, in *GetListProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	GetListProductByIDs(ctx context.Context, in *GetListProductByIDsRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	GetRecomendProduct(ctx context.Context, in *GetRecommendProductRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
+	DeleteProduct(ctx context.Context, in *DeleteProductRequest, opts ...grpc.CallOption) (*DeleteProductResponse, error)
+	DeleteProductByAdmin(ctx context.Context, in *DeleteProductByAdminRequest, opts ...grpc.CallOption) (*DeleteProductByAdminResponse, error)
 	GetProductBySupplier(ctx context.Context, in *GetProductBySupplierRequest, opts ...grpc.CallOption) (*GetListProductResponse, error)
 	UpdateProduct(ctx context.Context, in *UpdateProductRequest, opts ...grpc.CallOption) (*GeneralResponse, error)
 	CreateCategory(ctx context.Context, in *CreateCategoryRequest, opts ...grpc.CallOption) (*GeneralResponse, error)
 	GetListCategory(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*GetListCategoryResponse, error)
 	GetListProductInventory(ctx context.Context, in *GetInventoryRequest, opts ...grpc.CallOption) (*GetInventoryResponse, error)
 	DescInventory(ctx context.Context, in *DescInventoryRequest, opts ...grpc.CallOption) (*DescInventoryResponse, error)
+	IncInventory(ctx context.Context, in *IncInventoryRequest, opts ...grpc.CallOption) (*IncInventoryResponse, error)
 }
 
 type productServiceClient struct {
@@ -99,6 +102,24 @@ func (c *productServiceClient) GetRecomendProduct(ctx context.Context, in *GetRe
 	return out, nil
 }
 
+func (c *productServiceClient) DeleteProduct(ctx context.Context, in *DeleteProductRequest, opts ...grpc.CallOption) (*DeleteProductResponse, error) {
+	out := new(DeleteProductResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/DeleteProduct", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *productServiceClient) DeleteProductByAdmin(ctx context.Context, in *DeleteProductByAdminRequest, opts ...grpc.CallOption) (*DeleteProductByAdminResponse, error) {
+	out := new(DeleteProductByAdminResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/DeleteProductByAdmin", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *productServiceClient) GetProductBySupplier(ctx context.Context, in *GetProductBySupplierRequest, opts ...grpc.CallOption) (*GetListProductResponse, error) {
 	out := new(GetListProductResponse)
 	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/GetProductBySupplier", in, out, opts...)
@@ -153,6 +174,15 @@ func (c *productServiceClient) DescInventory(ctx context.Context, in *DescInvent
 	return out, nil
 }
 
+func (c *productServiceClient) IncInventory(ctx context.Context, in *IncInventoryRequest, opts ...grpc.CallOption) (*IncInventoryResponse, error) {
+	out := new(IncInventoryResponse)
+	err := c.cc.Invoke(ctx, "/ecommerce.ProductService/IncInventory", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ProductServiceServer is the server API for ProductService service.
 // All implementations must embed UnimplementedProductServiceServer
 // for forward compatibility
@@ -163,12 +193,15 @@ type ProductServiceServer interface {
 	GetListProduct(context.Context, *GetListProductRequest) (*GetListProductResponse, error)
 	GetListProductByIDs(context.Context, *GetListProductByIDsRequest) (*GetListProductResponse, error)
 	GetRecomendProduct(context.Context, *GetRecommendProductRequest) (*GetListProductResponse, error)
+	DeleteProduct(context.Context, *DeleteProductRequest) (*DeleteProductResponse, error)
+	DeleteProductByAdmin(context.Context, *DeleteProductByAdminRequest) (*DeleteProductByAdminResponse, error)
 	GetProductBySupplier(context.Context, *GetProductBySupplierRequest) (*GetListProductResponse, error)
 	UpdateProduct(context.Context, *UpdateProductRequest) (*GeneralResponse, error)
 	CreateCategory(context.Context, *CreateCategoryRequest) (*GeneralResponse, error)
 	GetListCategory(context.Context, *empty.Empty) (*GetListCategoryResponse, error)
 	GetListProductInventory(context.Context, *GetInventoryRequest) (*GetInventoryResponse, error)
 	DescInventory(context.Context, *DescInventoryRequest) (*DescInventoryResponse, error)
+	IncInventory(context.Context, *IncInventoryRequest) (*IncInventoryResponse, error)
 	mustEmbedUnimplementedProductServiceServer()
 }
 
@@ -194,6 +227,12 @@ func (UnimplementedProductServiceServer) GetListProductByIDs(context.Context, *G
 func (UnimplementedProductServiceServer) GetRecomendProduct(context.Context, *GetRecommendProductRequest) (*GetListProductResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetRecomendProduct not implemented")
 }
+func (UnimplementedProductServiceServer) DeleteProduct(context.Context, *DeleteProductRequest) (*DeleteProductResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteProduct not implemented")
+}
+func (UnimplementedProductServiceServer) DeleteProductByAdmin(context.Context, *DeleteProductByAdminRequest) (*DeleteProductByAdminResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteProductByAdmin not implemented")
+}
 func (UnimplementedProductServiceServer) GetProductBySupplier(context.Context, *GetProductBySupplierRequest) (*GetListProductResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProductBySupplier not implemented")
 }
@@ -211,6 +250,9 @@ func (UnimplementedProductServiceServer) GetListProductInventory(context.Context
 }
 func (UnimplementedProductServiceServer) DescInventory(context.Context, *DescInventoryRequest) (*DescInventoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DescInventory not implemented")
+}
+func (UnimplementedProductServiceServer) IncInventory(context.Context, *IncInventoryRequest) (*IncInventoryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IncInventory not implemented")
 }
 func (UnimplementedProductServiceServer) mustEmbedUnimplementedProductServiceServer() {}
 
@@ -333,6 +375,42 @@ func _ProductService_GetRecomendProduct_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProductService_DeleteProduct_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProductRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).DeleteProduct(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/DeleteProduct",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).DeleteProduct(ctx, req.(*DeleteProductRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProductService_DeleteProductByAdmin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteProductByAdminRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).DeleteProductByAdmin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/DeleteProductByAdmin",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).DeleteProductByAdmin(ctx, req.(*DeleteProductByAdminRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProductService_GetProductBySupplier_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetProductBySupplierRequest)
 	if err := dec(in); err != nil {
@@ -441,6 +519,24 @@ func _ProductService_DescInventory_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProductService_IncInventory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IncInventoryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProductServiceServer).IncInventory(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ecommerce.ProductService/IncInventory",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProductServiceServer).IncInventory(ctx, req.(*IncInventoryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ProductService_ServiceDesc is the grpc.ServiceDesc for ProductService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -473,6 +569,14 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProductService_GetRecomendProduct_Handler,
 		},
 		{
+			MethodName: "DeleteProduct",
+			Handler:    _ProductService_DeleteProduct_Handler,
+		},
+		{
+			MethodName: "DeleteProductByAdmin",
+			Handler:    _ProductService_DeleteProductByAdmin_Handler,
+		},
+		{
 			MethodName: "GetProductBySupplier",
 			Handler:    _ProductService_GetProductBySupplier_Handler,
 		},
@@ -495,6 +599,10 @@ var ProductService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DescInventory",
 			Handler:    _ProductService_DescInventory_Handler,
+		},
+		{
+			MethodName: "IncInventory",
+			Handler:    _ProductService_IncInventory_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"log"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/e-commerce-microservices/product-service/pb"
 	"github.com/e-commerce-microservices/product-service/repository"
 	"github.com/golang/protobuf/ptypes/empty"
+	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -20,23 +22,61 @@ import (
 type ProductService struct {
 	productStore *repository.Queries
 
-	imageClient pb.ImageServiceClient
+	reviewClient pb.ReviewServiceClient
+	imageClient  pb.ImageServiceClient
+	orderClient  pb.OrderServiceClient
+	db           *sql.DB
 
 	pb.UnimplementedProductServiceServer
 }
 
 // NewProductService creates a new ProductService
-func NewProductService(imageClient pb.ImageServiceClient, queries *repository.Queries) *ProductService {
+func NewProductService(imageClient pb.ImageServiceClient, reviewClient pb.ReviewServiceClient, orderClient pb.OrderServiceClient, queries *repository.Queries, db *sql.DB) *ProductService {
 	service := &ProductService{
+		orderClient:  orderClient,
 		productStore: queries,
+		reviewClient: reviewClient,
 		imageClient:  imageClient,
+		db:           db,
 	}
 
 	return service
 }
 
+// DeleteProduct ...
+func (service *ProductService) DeleteProduct(ctx context.Context, req *pb.DeleteProductRequest) (*pb.DeleteProductResponse, error) {
+	err := service.productStore.DeleteProduct(ctx, repository.DeleteProductParams{
+		ID:         req.GetProductId(),
+		SupplierID: req.GetSupplierId(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.DeleteProductResponse{
+		Message: "Xóa sản phẩm thành công",
+	}, nil
+}
+
+// DeleteProductByAdmin ...
+func (service *ProductService) DeleteProductByAdmin(ctx context.Context, req *pb.DeleteProductByAdminRequest) (*pb.DeleteProductByAdminResponse, error) {
+	err := service.productStore.DeleteProductByID(ctx, req.GetProductId())
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.DeleteProductByAdminResponse{
+		Message: "Xóa sản phẩm thành công",
+	}, nil
+}
+
 // DescInventory ...
 func (service *ProductService) DescInventory(ctx context.Context, req *pb.DescInventoryRequest) (*pb.DescInventoryResponse, error) {
+	// md, _ := metadata.FromIncomingContext(ctx)
+	// ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// ctx, span := otel.Tracer("").Start(ctx, "ProductService.UpdateInventory")
+	// defer span.End()
 	err := service.productStore.DescInventory(ctx, repository.DescInventoryParams{
 		Inventory: req.GetCount(),
 		ID:        req.GetProductId(),
@@ -46,6 +86,21 @@ func (service *ProductService) DescInventory(ctx context.Context, req *pb.DescIn
 	}
 
 	return &pb.DescInventoryResponse{
+		Message: "OK",
+	}, nil
+}
+
+// IncInventory ...
+func (service *ProductService) IncInventory(ctx context.Context, req *pb.IncInventoryRequest) (*pb.IncInventoryResponse, error) {
+	err := service.productStore.IncInventory(ctx, repository.IncInventoryParams{
+		Inventory: req.GetCount(),
+		ID:        req.GetProductId(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.IncInventoryResponse{
 		Message: "OK",
 	}, nil
 }
@@ -92,11 +147,17 @@ func (service *ProductService) GetListCategory(ctx context.Context, _ *empty.Emp
 
 // CreateProduct ...
 func (service *ProductService) CreateProduct(ctx context.Context, req *pb.CreateProductRequest) (*pb.CreateProductResponse, error) {
+	if len(req.GetProductName()) == 0 {
+		return nil, errors.New("Vui lòng điền thông tin tên sản phẩm")
+	}
+	if req.GetPrice() <= 0 || req.GetInventory() <= 0 {
+		return nil, errors.New("Vui lòng điền giá và số lượng sản phẩm")
+	}
+
 	thumbnail, err := uploadImage(ctx, req.GetThumbnailDataChunk(), service.imageClient)
 	if err != nil {
 		return nil, err
 	}
-
 	_, err = service.productStore.CreateProduct(ctx, repository.CreateProductParams{
 		Name:        req.GetProductName(),
 		Description: req.GetDesc(),
@@ -105,6 +166,10 @@ func (service *ProductService) CreateProduct(ctx context.Context, req *pb.Create
 		Inventory:   int32(req.GetInventory()),
 		SupplierID:  req.GetSupplierId(),
 		CategoryID:  req.GetCategoryId(),
+		Brand: sql.NullString{
+			String: req.GetBrand(),
+			Valid:  true,
+		},
 	})
 
 	if err != nil {
@@ -125,16 +190,57 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+		ProductId: product.ID,
+	})
+	if err != nil {
+		return &pb.Product{
+			ProductId:  product.ID,
+			SupplierId: product.SupplierID,
+			CategoryId: product.CategoryID,
+			Name:       product.Name,
+			Desc:       product.Description,
+			Price:      product.Price,
+			Thumbnail:  product.Thumbnail,
+			Inventory:  product.Inventory,
+			CreatedAt:  timestamppb.New(product.CreatedAt),
+			Brand:      product.Brand.String,
+		}, nil
+	}
+	var totalStar int32
+	lenTotalStar := 0
+
+	for _, review := range reviewResponse.ListReview {
+		if review.NumStar > 0 {
+			totalStar += review.NumStar
+			lenTotalStar++
+		}
+	}
+	var starAvg float32
+	if lenTotalStar > 0 {
+		starAvg = float32(totalStar / int32(lenTotalStar))
+	}
+	var totalSold int32
+	soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+		ProductId: product.ID,
+	})
+	if err == nil {
+		totalSold = int32(soldProductResponse.Count)
+	}
+
 	return &pb.Product{
-		SupplierId: product.SupplierID,
-		CategoryId: product.CategoryID,
-		Name:       product.Name,
-		Desc:       product.Description,
-		Price:      product.Price,
-		Thumbnail:  product.Thumbnail,
-		Inventory:  product.Inventory,
-		CreatedAt:  timestamppb.New(product.CreatedAt),
-		Brand:      product.Brand.String,
+		ProductId:   product.ID,
+		SupplierId:  product.SupplierID,
+		CategoryId:  product.CategoryID,
+		Name:        product.Name,
+		Desc:        product.Description,
+		Price:       product.Price,
+		Thumbnail:   product.Thumbnail,
+		Inventory:   product.Inventory,
+		CreatedAt:   timestamppb.New(product.CreatedAt),
+		Brand:       product.Brand.String,
+		TotalSold:   int64(totalSold),
+		StarAverage: starAvg,
 	}, nil
 }
 
@@ -142,7 +248,15 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetListProductRequest) (*pb.GetListProductResponse, error) {
 	var listProduct []repository.Product
 	var err error
+	log.Println("inc", req.ByPriceInc)
 	if req.GetCategoryId() != 0 {
+		tmp, _ := ProductFilter{
+			ByTime:      req.GetByTime(),
+			ByPriceInc:  req.ByPriceInc,
+			ByPriceDesc: req.ByPriceDesc,
+		}.GenerateListProduct(service.db, req.GetCategoryId(), req.GetLimit(), req.GetOffset())
+		log.Println(tmp)
+
 		listProduct, err = service.productStore.GetProductByCategory(ctx, repository.GetProductByCategoryParams{
 			CategoryID: req.GetCategoryId(),
 			Limit:      req.GetLimit(),
@@ -161,17 +275,57 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 
 	result := make([]*pb.Product, 0, len(listProduct))
 	for _, product := range listProduct {
-		result = append(result, &pb.Product{
-			ProductId:  product.ID,
-			SupplierId: product.SupplierID,
-			CategoryId: product.CategoryID,
-			Name:       product.Name,
-			Desc:       product.Description,
-			Price:      product.Price,
-			Thumbnail:  product.Thumbnail,
-			Inventory:  product.Inventory,
-			CreatedAt:  timestamppb.New(product.CreatedAt),
+		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+			ProductId: product.ID,
 		})
+		if err != nil {
+			result = append(result, &pb.Product{
+				ProductId:  product.ID,
+				SupplierId: product.SupplierID,
+				CategoryId: product.CategoryID,
+				Name:       product.Name,
+				Desc:       product.Description,
+				Price:      product.Price,
+				Thumbnail:  product.Thumbnail,
+				Inventory:  product.Inventory,
+				CreatedAt:  timestamppb.New(product.CreatedAt),
+			})
+		} else {
+			var totalStar int32
+			lenTotalStar := 0
+
+			for _, review := range reviewResponse.ListReview {
+				if review.NumStar > 0 {
+					totalStar += review.NumStar
+					lenTotalStar++
+				}
+			}
+			var starAvg float32
+			if lenTotalStar > 0 {
+				starAvg = float32(totalStar / int32(lenTotalStar))
+			}
+			var totalSold int64
+			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+				ProductId: product.ID,
+			})
+			if err == nil {
+				totalSold = int64(soldProductResponse.Count)
+			}
+
+			result = append(result, &pb.Product{
+				ProductId:   product.ID,
+				SupplierId:  product.SupplierID,
+				CategoryId:  product.CategoryID,
+				Name:        product.Name,
+				Desc:        product.Description,
+				Price:       product.Price,
+				Thumbnail:   product.Thumbnail,
+				Inventory:   product.Inventory,
+				CreatedAt:   timestamppb.New(product.CreatedAt),
+				StarAverage: starAvg,
+				TotalSold:   totalSold,
+			})
+		}
 	}
 
 	return &pb.GetListProductResponse{
@@ -190,18 +344,58 @@ func (service *ProductService) GetRecomendProduct(ctx context.Context, req *pb.G
 	}
 	listProduct := make([]*pb.Product, 0, len(listProductStore))
 	for _, product := range listProductStore {
-		listProduct = append(listProduct, &pb.Product{
-			SupplierId: product.SupplierID,
-			CategoryId: product.CategoryID,
-			Name:       product.Name,
-			Desc:       product.Description,
-			Price:      product.Price,
-			Thumbnail:  product.Thumbnail,
-			Inventory:  product.Inventory,
-			CreatedAt:  timestamppb.New(product.CreatedAt),
-			ProductId:  product.ID,
-			Brand:      product.Brand.String,
+		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+			ProductId: product.ID,
 		})
+		if err != nil {
+			listProduct = append(listProduct, &pb.Product{
+				SupplierId: product.SupplierID,
+				CategoryId: product.CategoryID,
+				Name:       product.Name,
+				Desc:       product.Description,
+				Price:      product.Price,
+				Thumbnail:  product.Thumbnail,
+				Inventory:  product.Inventory,
+				CreatedAt:  timestamppb.New(product.CreatedAt),
+				ProductId:  product.ID,
+				Brand:      product.Brand.String,
+			})
+		} else {
+			var totalStar int32
+			lenTotalStar := 0
+
+			for _, review := range reviewResponse.ListReview {
+				if review.NumStar > 0 {
+					totalStar += review.NumStar
+					lenTotalStar++
+				}
+			}
+			var starAvg float32
+			if lenTotalStar > 0 {
+				starAvg = float32(totalStar / int32(lenTotalStar))
+			}
+			var totalSold int64
+			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+				ProductId: product.ID,
+			})
+			if err == nil {
+				totalSold = int64(soldProductResponse.Count)
+			}
+
+			listProduct = append(listProduct, &pb.Product{
+				ProductId:   product.ID,
+				SupplierId:  product.SupplierID,
+				CategoryId:  product.CategoryID,
+				Name:        product.Name,
+				Desc:        product.Description,
+				Price:       product.Price,
+				Thumbnail:   product.Thumbnail,
+				Inventory:   product.Inventory,
+				CreatedAt:   timestamppb.New(product.CreatedAt),
+				StarAverage: starAvg,
+				TotalSold:   totalSold,
+			})
+		}
 	}
 
 	return &pb.GetListProductResponse{
@@ -220,29 +414,69 @@ func (service *ProductService) GetProductBySupplier(ctx context.Context, req *pb
 		return nil, err
 	}
 
-	listProduct := make([]*pb.Product, 0, len(tmp))
+	result := make([]*pb.Product, 0, len(tmp))
 	for _, product := range tmp {
-		listProduct = append(listProduct, &pb.Product{
-			SupplierId: product.SupplierID,
-			CategoryId: product.CategoryID,
-			Name:       product.Name,
-			Desc:       product.Description,
-			Price:      product.Price,
-			Thumbnail:  product.Thumbnail,
-			Inventory:  product.Inventory,
-			CreatedAt:  timestamppb.New(product.CreatedAt),
-			ProductId:  product.ID,
-			Brand:      product.Brand.String,
+		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+			ProductId: product.ID,
 		})
+		if err != nil {
+			result = append(result, &pb.Product{
+				ProductId:  product.ID,
+				SupplierId: product.SupplierID,
+				CategoryId: product.CategoryID,
+				Name:       product.Name,
+				Desc:       product.Description,
+				Price:      product.Price,
+				Thumbnail:  product.Thumbnail,
+				Inventory:  product.Inventory,
+				CreatedAt:  timestamppb.New(product.CreatedAt),
+			})
+		} else {
+			var totalStar int32
+			lenTotalStar := 0
+
+			for _, review := range reviewResponse.ListReview {
+				if review.NumStar > 0 {
+					totalStar += review.NumStar
+					lenTotalStar++
+				}
+			}
+			var starAvg float32
+			if lenTotalStar > 0 {
+				starAvg = float32(totalStar / int32(lenTotalStar))
+			}
+			var totalSold int64
+			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+				ProductId: product.ID,
+			})
+			if err == nil {
+				totalSold = int64(soldProductResponse.Count)
+			}
+
+			result = append(result, &pb.Product{
+				ProductId:   product.ID,
+				SupplierId:  product.SupplierID,
+				CategoryId:  product.CategoryID,
+				Name:        product.Name,
+				Desc:        product.Description,
+				Price:       product.Price,
+				Thumbnail:   product.Thumbnail,
+				Inventory:   product.Inventory,
+				CreatedAt:   timestamppb.New(product.CreatedAt),
+				StarAverage: starAvg,
+				TotalSold:   totalSold,
+			})
+		}
 	}
 
 	return &pb.GetListProductResponse{
-		ListProduct: listProduct,
+		ListProduct: result,
 	}, nil
 }
 
 // UpdateProduct ...
 func (service *ProductService) UpdateProduct(ctx context.Context, req *pb.UpdateProductRequest) (*pb.GeneralResponse, error) {
+	log.Println("update product: ", req)
 	err := service.productStore.UpdateProduct(ctx, repository.UpdateProductParams{
 		ID:        req.GetProductId(),
 		Name:      req.GetName(),
@@ -252,6 +486,7 @@ func (service *ProductService) UpdateProduct(ctx context.Context, req *pb.Update
 			String: req.GetBrand(),
 			Valid:  false,
 		},
+		SupplierID: req.GetSupplierId(),
 	})
 	if err != nil {
 		return nil, err
@@ -268,6 +503,11 @@ func (service *ProductService) GetListProductByIDs(ctx context.Context, req *pb.
 	for _, v := range req.GetListId() {
 		ids = append(ids, strconv.FormatInt(v, 10))
 	}
+	if len(ids) == 0 {
+		return &pb.GetListProductResponse{
+			ListProduct: []*pb.Product{},
+		}, nil
+	}
 	query := `	SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN ($1)`
 	query = strings.ReplaceAll(query, "$1", strings.Join(ids, ","))
 	listProduct, err := service.productStore.GetListProductByIDs(ctx, query)
@@ -277,21 +517,81 @@ func (service *ProductService) GetListProductByIDs(ctx context.Context, req *pb.
 
 	result := make([]*pb.Product, 0, len(listProduct))
 	for _, product := range listProduct {
-		result = append(result, &pb.Product{
-			SupplierId: product.SupplierID,
-			CategoryId: product.CategoryID,
-			Name:       product.Name,
-			Price:      product.Price,
-			Thumbnail:  product.Thumbnail,
-			Inventory:  product.Inventory,
-			CreatedAt:  timestamppb.New(product.CreatedAt),
-			ProductId:  product.ID,
-			Brand:      product.Brand.String,
+		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+			ProductId: product.ID,
 		})
+		if err != nil {
+			result = append(result, &pb.Product{
+				ProductId:  product.ID,
+				SupplierId: product.SupplierID,
+				CategoryId: product.CategoryID,
+				Name:       product.Name,
+				Desc:       product.Description,
+				Price:      product.Price,
+				Thumbnail:  product.Thumbnail,
+				Inventory:  product.Inventory,
+				CreatedAt:  timestamppb.New(product.CreatedAt),
+			})
+		} else {
+			var totalStar int32
+			lenTotalStar := 0
+
+			for _, review := range reviewResponse.ListReview {
+				if review.NumStar > 0 {
+					totalStar += review.NumStar
+					lenTotalStar++
+				}
+			}
+			var starAvg float32
+			if lenTotalStar > 0 {
+				starAvg = float32(totalStar / int32(lenTotalStar))
+			}
+			var totalSold int64
+			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+				ProductId: product.ID,
+			})
+			if err == nil {
+				totalSold = int64(soldProductResponse.Count)
+			}
+
+			result = append(result, &pb.Product{
+				ProductId:   product.ID,
+				SupplierId:  product.SupplierID,
+				CategoryId:  product.CategoryID,
+				Name:        product.Name,
+				Desc:        product.Description,
+				Price:       product.Price,
+				Thumbnail:   product.Thumbnail,
+				Inventory:   product.Inventory,
+				CreatedAt:   timestamppb.New(product.CreatedAt),
+				StarAverage: starAvg,
+				TotalSold:   totalSold,
+			})
+		}
 	}
 
 	return &pb.GetListProductResponse{
 		ListProduct: result,
+	}, nil
+}
+
+var tracer = otel.Tracer("auth-service")
+
+// GetListProductInventory ...
+func (service *ProductService) GetListProductInventory(ctx context.Context, req *pb.GetInventoryRequest) (*pb.GetInventoryResponse, error) {
+	ctx, span := tracer.Start(ctx, "checkProductAvailable")
+	defer span.End()
+	// md, _ := metadata.FromIncomingContext(ctx)
+	// ctx = metadata.NewOutgoingContext(ctx, md)
+
+	// ctx, span := otel.Tracer("").Start(ctx, "ProductService.CheckInventory")
+	// defer span.End()
+	resp, err := service.productStore.GetProductInventory(ctx, req.GetProductId())
+	if err != nil {
+		return nil, err
+	}
+	return &pb.GetInventoryResponse{
+		Count: int64(resp),
 	}, nil
 }
 
@@ -318,6 +618,9 @@ func uploadImage(ctx context.Context, dataChunk string, imageClient pb.ImageServ
 	}
 	// send mime type
 	tmp := strings.Split(dataChunk, "data:image/")
+	if len(tmp) <= 1 {
+		return "", errors.New("Vui lòng thêm ảnh")
+	}
 	mimeType := strings.Split(tmp[1], ";")[0]
 	err = stream.Send(&pb.UploadImageRequest{
 		Data: &pb.UploadImageRequest_Info{

@@ -11,15 +11,53 @@ import (
 	"github.com/e-commerce-microservices/product-service/repository"
 	"github.com/e-commerce-microservices/product-service/service"
 	"github.com/joho/godotenv"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
 
 	// postgres driver
 	_ "github.com/lib/pq"
 )
 
+func init() {
+	tp, tpErr := jaegerTraceProvider()
+	if tpErr != nil {
+		log.Fatal(tpErr)
+	}
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+}
+func jaegerTraceProvider() (*sdktrace.TracerProvider, error) {
+
+	// exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://jaeger-all-in-one:14268/api/traces")))
+	// exp, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://jaeger-all-in-one:14268/api/traces")))
+	exp, err := jaeger.New(jaeger.WithAgentEndpoint(jaeger.WithAgentHost("10.3.68.12")))
+	if err != nil {
+		log.Println("err: ", err)
+		return nil, err
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exp),
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("product service"),
+			attribute.String("environment", "development"),
+		)),
+		sdktrace.WithSampler(sdktrace.TraceIDRatioBased(1.0)),
+	)
+
+	return tp, nil
+}
+
 func main() {
 	// create grpc server
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor()))
 
 	// init user db connection
 	pgDSN := fmt.Sprintf(
@@ -47,8 +85,22 @@ func main() {
 	// create image client
 	imageClient := pb.NewImageServiceClient(imageServiceConn)
 
+	// dial review client
+	reviewClientConn, err := grpc.Dial("review-service:8080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("can't dial review service: ", err)
+	}
+	reviewClient := pb.NewReviewServiceClient(reviewClientConn)
+
+	// dial order client
+	orderClientConn, err := grpc.Dial("order-service:8080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("can't dial order service: ", err)
+	}
+	orderClient := pb.NewOrderServiceClient(orderClientConn)
+
 	// create product service
-	productService := service.NewProductService(imageClient, queries)
+	productService := service.NewProductService(imageClient, reviewClient, orderClient, queries, productDB)
 	// register product service
 	pb.RegisterProductServiceServer(grpcServer, productService)
 

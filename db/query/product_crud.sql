@@ -52,3 +52,19 @@ UPDATE product
 SET
     inventory = inventory - $1
 WHERE id = $2 and inventory >= $1;
+
+-- name: GetProductInventory :one
+SELECT inventory FROM product
+WHERE id = $1 LIMIT 1;
+
+-- name: IncInventory :exec
+UPDATE product
+SET
+    inventory = inventory + $1
+WHERE id = $2;
+
+-- name: DeleteProduct :exec
+DELETE FROM product WHERE id = $1 and supplier_id = $2;
+
+-- name: DeleteProductByID :exec
+DELETE FROM product WHERE id = $1;

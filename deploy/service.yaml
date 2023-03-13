@@ -16,7 +16,7 @@ spec:
         image: ngoctd/ecommerce-product:latest
         resources:
           limits:
-            memory: "128Mi"
+            memory: "50Mi"
             cpu: "500m"
         ports:
         - containerPort: 8080
