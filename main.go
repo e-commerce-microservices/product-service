@@ -99,8 +99,14 @@ func main() {
 	}
 	orderClient := pb.NewOrderServiceClient(orderClientConn)
 
+	searchClientConn, err := grpc.Dial("search-service:8080", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal("can't dial order service: ", err)
+	}
+	searchClient := pb.NewSearchServiceClient(searchClientConn)
+
 	// create product service
-	productService := service.NewProductService(imageClient, reviewClient, orderClient, queries, productDB)
+	productService := service.NewProductService(imageClient, reviewClient, orderClient, searchClient, queries, productDB)
 	// register product service
 	pb.RegisterProductServiceServer(grpcServer, productService)
 

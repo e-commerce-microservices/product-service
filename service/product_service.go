@@ -25,22 +25,39 @@ type ProductService struct {
 	reviewClient pb.ReviewServiceClient
 	imageClient  pb.ImageServiceClient
 	orderClient  pb.OrderServiceClient
+	searchClient pb.SearchServiceClient
 	db           *sql.DB
 
 	pb.UnimplementedProductServiceServer
 }
 
 // NewProductService creates a new ProductService
-func NewProductService(imageClient pb.ImageServiceClient, reviewClient pb.ReviewServiceClient, orderClient pb.OrderServiceClient, queries *repository.Queries, db *sql.DB) *ProductService {
+func NewProductService(imageClient pb.ImageServiceClient, reviewClient pb.ReviewServiceClient, orderClient pb.OrderServiceClient, searchClient pb.SearchServiceClient, queries *repository.Queries, db *sql.DB) *ProductService {
 	service := &ProductService{
 		orderClient:  orderClient,
 		productStore: queries,
 		reviewClient: reviewClient,
 		imageClient:  imageClient,
+		searchClient: searchClient,
 		db:           db,
 	}
 
 	return service
+}
+func (service *ProductService) GetCategoryBySupplier(ctx context.Context, req *pb.GetCategoryBySupplierRequest) (*pb.GetCategoryBySupplierResponse, error) {
+	listCategory, _ := service.productStore.GetCategoryBySupplier(ctx, req.GetSupplierId())
+	var result []*pb.GetCategoryBySupplierResponse_CategoryDetail
+
+	for _, category := range listCategory {
+		result = append(result, &pb.GetCategoryBySupplierResponse_CategoryDetail{
+			CategoryId:   category.CategoryID,
+			CategoryName: category.Name,
+		})
+	}
+
+	return &pb.GetCategoryBySupplierResponse{
+		CategoryDetail: result,
+	}, nil
 }
 
 // DeleteProduct ...
@@ -158,7 +175,7 @@ func (service *ProductService) CreateProduct(ctx context.Context, req *pb.Create
 	if err != nil {
 		return nil, err
 	}
-	_, err = service.productStore.CreateProduct(ctx, repository.CreateProductParams{
+	prod, err := service.productStore.CreateProduct(ctx, repository.CreateProductParams{
 		Name:        req.GetProductName(),
 		Description: req.GetDesc(),
 		Price:       req.GetPrice(),
@@ -177,6 +194,11 @@ func (service *ProductService) CreateProduct(ctx context.Context, req *pb.Create
 	}
 
 	// add product into es
+	_, err = service.searchClient.AddProduct(ctx, &pb.AddProductRequest{
+		ProductId:   prod.ID,
+		ProductName: prod.Name,
+	})
+	log.Println("insert es error: ", err)
 
 	return &pb.CreateProductResponse{
 		Message: "product is created",
@@ -248,23 +270,45 @@ func (service *ProductService) GetProduct(ctx context.Context, req *pb.GetProduc
 func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetListProductRequest) (*pb.GetListProductResponse, error) {
 	var listProduct []repository.Product
 	var err error
-	log.Println("inc", req.ByPriceInc)
 	if req.GetCategoryId() != 0 {
-		tmp, _ := ProductFilter{
-			ByTime:      req.GetByTime(),
-			ByPriceInc:  req.ByPriceInc,
-			ByPriceDesc: req.ByPriceDesc,
-		}.GenerateListProduct(service.db, req.GetCategoryId(), req.GetLimit(), req.GetOffset())
-		log.Println(tmp)
-
-		listProduct, err = service.productStore.GetProductByCategory(ctx, repository.GetProductByCategoryParams{
-			CategoryID: req.GetCategoryId(),
-			Limit:      req.GetLimit(),
-			Offset:     req.GetOffset(),
-		})
-		if err != nil {
-			return nil, status.Error(codes.Internal, err.Error())
+		if req.GetByTime() {
+			listProduct, err = service.productStore.GetProductByCategoryAndTime(ctx, repository.GetProductByCategoryAndTimeParams{
+				CategoryID: req.GetCategoryId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+		} else if req.GetByPriceDesc() {
+			listProduct, err = service.productStore.GetProductByCategoryAndPriceDesc(ctx, repository.GetProductByCategoryAndPriceDescParams{
+				CategoryID: req.GetCategoryId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+		} else if req.GetByPriceInc() {
+			listProduct, err = service.productStore.GetProductByCategoryAndPriceInc(ctx, repository.GetProductByCategoryAndPriceIncParams{
+				CategoryID: req.GetCategoryId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
+		} else {
+			listProduct, err = service.productStore.GetProductByCategory(ctx, repository.GetProductByCategoryParams{
+				CategoryID: req.GetCategoryId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 		}
+
 	} else {
 		listProduct, err = service.productStore.GetAllProduct(ctx)
 		if err != nil {
@@ -333,85 +377,96 @@ func (service *ProductService) GetListProduct(ctx context.Context, req *pb.GetLi
 	}, nil
 }
 
-// GetRecomendProduct ...
-func (service *ProductService) GetRecomendProduct(ctx context.Context, req *pb.GetRecommendProductRequest) (*pb.GetListProductResponse, error) {
-	listProductStore, err := service.productStore.GetRecommendProduct(ctx, repository.GetRecommendProductParams{
-		Limit:  req.GetLimit(),
-		Offset: req.GetOffset(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	listProduct := make([]*pb.Product, 0, len(listProductStore))
-	for _, product := range listProductStore {
-		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
-			ProductId: product.ID,
-		})
-		if err != nil {
-			listProduct = append(listProduct, &pb.Product{
-				SupplierId: product.SupplierID,
-				CategoryId: product.CategoryID,
-				Name:       product.Name,
-				Desc:       product.Description,
-				Price:      product.Price,
-				Thumbnail:  product.Thumbnail,
-				Inventory:  product.Inventory,
-				CreatedAt:  timestamppb.New(product.CreatedAt),
-				ProductId:  product.ID,
-				Brand:      product.Brand.String,
-			})
-		} else {
-			var totalStar int32
-			lenTotalStar := 0
-
-			for _, review := range reviewResponse.ListReview {
-				if review.NumStar > 0 {
-					totalStar += review.NumStar
-					lenTotalStar++
-				}
-			}
-			var starAvg float32
-			if lenTotalStar > 0 {
-				starAvg = float32(totalStar / int32(lenTotalStar))
-			}
-			var totalSold int64
-			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
-				ProductId: product.ID,
-			})
-			if err == nil {
-				totalSold = int64(soldProductResponse.Count)
-			}
-
-			listProduct = append(listProduct, &pb.Product{
-				ProductId:   product.ID,
-				SupplierId:  product.SupplierID,
-				CategoryId:  product.CategoryID,
-				Name:        product.Name,
-				Desc:        product.Description,
-				Price:       product.Price,
-				Thumbnail:   product.Thumbnail,
-				Inventory:   product.Inventory,
-				CreatedAt:   timestamppb.New(product.CreatedAt),
-				StarAverage: starAvg,
-				TotalSold:   totalSold,
-			})
-		}
-	}
-
-	return &pb.GetListProductResponse{
-		ListProduct: listProduct,
-	}, nil
-}
-
 // GetProductBySupplier ...
 func (service *ProductService) GetProductBySupplier(ctx context.Context, req *pb.GetProductBySupplierRequest) (*pb.GetListProductResponse, error) {
-	tmp, err := service.productStore.GetProductBySupplier(ctx, repository.GetProductBySupplierParams{
-		SupplierID: req.GetSupplierId(),
-		Limit:      req.GetLimit(),
-		Offset:     req.GetOffset(),
-	})
-	if err != nil {
-		return nil, err
+	var tmp []repository.Product
+	var err error
+
+	if req.GetByTime() {
+		if req.GetCategoryId() == 0 {
+			tmp, err = service.productStore.GetProductBySupplierAndTime(ctx, repository.GetProductBySupplierAndTimeParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tmp, err = service.productStore.GetProductBySupplierAndTimeAndCategory(ctx, repository.GetProductBySupplierAndTimeAndCategoryParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+				CategoryID: req.GetCategoryId(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else if req.GetByPriceInc() {
+		if req.GetCategoryId() == 0 {
+			tmp, err = service.productStore.GetProductBySupplierAndPriceInc(ctx, repository.GetProductBySupplierAndPriceIncParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tmp, err = service.productStore.GetProductBySupplierAndPriceIncAndCategory(ctx, repository.GetProductBySupplierAndPriceIncAndCategoryParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				CategoryID: req.GetCategoryId(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+	} else if req.GetByPriceDesc() {
+		if req.GetCategoryId() == 0 {
+			tmp, err = service.productStore.GetProductBySupplierAndPriceDesc(ctx, repository.GetProductBySupplierAndPriceDescParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tmp, err = service.productStore.GetProductBySupplierAndPriceDescAndCategory(ctx, repository.GetProductBySupplierAndPriceDescAndCategoryParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				CategoryID: req.GetCategoryId(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if req.GetCategoryId() == 0 {
+			tmp, err = service.productStore.GetProductBySupplier(ctx, repository.GetProductBySupplierParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			tmp, err = service.productStore.GetProductBySupplierAndCategory(ctx, repository.GetProductBySupplierAndCategoryParams{
+				SupplierID: req.GetSupplierId(),
+				Limit:      req.GetLimit(),
+				Offset:     req.GetOffset(),
+				CategoryID: req.GetCategoryId(),
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	result := make([]*pb.Product, 0, len(tmp))
@@ -508,7 +563,7 @@ func (service *ProductService) GetListProductByIDs(ctx context.Context, req *pb.
 			ListProduct: []*pb.Product{},
 		}, nil
 	}
-	query := `	SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN ($1)`
+	query := `SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id IN ($1)`
 	query = strings.ReplaceAll(query, "$1", strings.Join(ids, ","))
 	listProduct, err := service.productStore.GetListProductByIDs(ctx, query)
 	if err != nil {
@@ -647,4 +702,74 @@ func uploadImage(ctx context.Context, dataChunk string, imageClient pb.ImageServ
 	}
 
 	return res.GetImageUrl(), nil
+}
+
+// GetRecomendProduct ...
+func (service *ProductService) GetRecomendProduct(ctx context.Context, req *pb.GetRecommendProductRequest) (*pb.GetListProductResponse, error) {
+	listProductStore, err := service.productStore.GetRecommendProduct(ctx, repository.GetRecommendProductParams{
+		Limit:  req.GetLimit(),
+		Offset: req.GetOffset(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	listProduct := make([]*pb.Product, 0, len(listProductStore))
+	for _, product := range listProductStore {
+		reviewResponse, err := service.reviewClient.GetAllReviewByProductID(ctx, &pb.GetAllReviewByProductIDRequest{
+			ProductId: product.ID,
+		})
+		if err != nil {
+			listProduct = append(listProduct, &pb.Product{
+				SupplierId: product.SupplierID,
+				CategoryId: product.CategoryID,
+				Name:       product.Name,
+				Desc:       product.Description,
+				Price:      product.Price,
+				Thumbnail:  product.Thumbnail,
+				Inventory:  product.Inventory,
+				CreatedAt:  timestamppb.New(product.CreatedAt),
+				ProductId:  product.ID,
+				Brand:      product.Brand.String,
+			})
+		} else {
+			var totalStar int32
+			lenTotalStar := 0
+
+			for _, review := range reviewResponse.ListReview {
+				if review.NumStar > 0 {
+					totalStar += review.NumStar
+					lenTotalStar++
+				}
+			}
+			var starAvg float32
+			if lenTotalStar > 0 {
+				starAvg = float32(totalStar / int32(lenTotalStar))
+			}
+			var totalSold int64
+			soldProductResponse, err := service.orderClient.GetSoldProduct(ctx, &pb.GetSoldProductRequest{
+				ProductId: product.ID,
+			})
+			if err == nil {
+				totalSold = int64(soldProductResponse.Count)
+			}
+
+			listProduct = append(listProduct, &pb.Product{
+				ProductId:   product.ID,
+				SupplierId:  product.SupplierID,
+				CategoryId:  product.CategoryID,
+				Name:        product.Name,
+				Desc:        product.Description,
+				Price:       product.Price,
+				Thumbnail:   product.Thumbnail,
+				Inventory:   product.Inventory,
+				CreatedAt:   timestamppb.New(product.CreatedAt),
+				StarAverage: starAvg,
+				TotalSold:   totalSold,
+			})
+		}
+	}
+
+	return &pb.GetListProductResponse{
+		ListProduct: listProduct,
+	}, nil
 }

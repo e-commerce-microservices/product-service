@@ -227,6 +227,138 @@ func (q *Queries) GetProductByCategory(ctx context.Context, arg GetProductByCate
 	return items, nil
 }
 
+const getProductByCategoryAndPriceDesc = `-- name: GetProductByCategoryAndPriceDesc :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE category_id = $1 ORDER BY price DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductByCategoryAndPriceDescParams struct {
+	CategoryID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductByCategoryAndPriceDesc(ctx context.Context, arg GetProductByCategoryAndPriceDescParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductByCategoryAndPriceDesc, arg.CategoryID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductByCategoryAndPriceInc = `-- name: GetProductByCategoryAndPriceInc :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE category_id = $1 ORDER BY price LIMIT $2 OFFSET $3
+`
+
+type GetProductByCategoryAndPriceIncParams struct {
+	CategoryID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductByCategoryAndPriceInc(ctx context.Context, arg GetProductByCategoryAndPriceIncParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductByCategoryAndPriceInc, arg.CategoryID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductByCategoryAndTime = `-- name: GetProductByCategoryAndTime :many
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE category_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductByCategoryAndTimeParams struct {
+	CategoryID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductByCategoryAndTime(ctx context.Context, arg GetProductByCategoryAndTimeParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductByCategoryAndTime, arg.CategoryID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getProductByID = `-- name: GetProductByID :one
 
 SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE id = $1
@@ -263,6 +395,345 @@ type GetProductBySupplierParams struct {
 
 func (q *Queries) GetProductBySupplier(ctx context.Context, arg GetProductBySupplierParams) ([]Product, error) {
 	rows, err := q.db.QueryContext(ctx, getProductBySupplier, arg.SupplierID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndCategory = `-- name: GetProductBySupplierAndCategory :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 AND category_id = $4 LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndCategoryParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+	CategoryID int64
+}
+
+func (q *Queries) GetProductBySupplierAndCategory(ctx context.Context, arg GetProductBySupplierAndCategoryParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndCategory,
+		arg.SupplierID,
+		arg.Limit,
+		arg.Offset,
+		arg.CategoryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndPriceDesc = `-- name: GetProductBySupplierAndPriceDesc :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 ORDER BY price DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndPriceDescParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductBySupplierAndPriceDesc(ctx context.Context, arg GetProductBySupplierAndPriceDescParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndPriceDesc, arg.SupplierID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndPriceDescAndCategory = `-- name: GetProductBySupplierAndPriceDescAndCategory :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 AND category_id = $4 ORDER BY price DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndPriceDescAndCategoryParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+	CategoryID int64
+}
+
+func (q *Queries) GetProductBySupplierAndPriceDescAndCategory(ctx context.Context, arg GetProductBySupplierAndPriceDescAndCategoryParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndPriceDescAndCategory,
+		arg.SupplierID,
+		arg.Limit,
+		arg.Offset,
+		arg.CategoryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndPriceInc = `-- name: GetProductBySupplierAndPriceInc :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 ORDER BY price LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndPriceIncParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductBySupplierAndPriceInc(ctx context.Context, arg GetProductBySupplierAndPriceIncParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndPriceInc, arg.SupplierID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndPriceIncAndCategory = `-- name: GetProductBySupplierAndPriceIncAndCategory :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 AND category_id=$4 ORDER BY price LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndPriceIncAndCategoryParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+	CategoryID int64
+}
+
+func (q *Queries) GetProductBySupplierAndPriceIncAndCategory(ctx context.Context, arg GetProductBySupplierAndPriceIncAndCategoryParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndPriceIncAndCategory,
+		arg.SupplierID,
+		arg.Limit,
+		arg.Offset,
+		arg.CategoryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndTime = `-- name: GetProductBySupplierAndTime :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndTimeParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+}
+
+func (q *Queries) GetProductBySupplierAndTime(ctx context.Context, arg GetProductBySupplierAndTimeParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndTime, arg.SupplierID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Product
+	for rows.Next() {
+		var i Product
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.Price,
+			&i.Thumbnail,
+			&i.Inventory,
+			&i.SupplierID,
+			&i.CategoryID,
+			&i.CreatedAt,
+			&i.Brand,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getProductBySupplierAndTimeAndCategory = `-- name: GetProductBySupplierAndTimeAndCategory :many
+
+SELECT id, name, description, price, thumbnail, inventory, supplier_id, category_id, created_at, brand FROM product WHERE supplier_id = $1 AND category_id = $4 ORDER BY created_at DESC LIMIT $2 OFFSET $3
+`
+
+type GetProductBySupplierAndTimeAndCategoryParams struct {
+	SupplierID int64
+	Limit      int32
+	Offset     int32
+	CategoryID int64
+}
+
+func (q *Queries) GetProductBySupplierAndTimeAndCategory(ctx context.Context, arg GetProductBySupplierAndTimeAndCategoryParams) ([]Product, error) {
+	rows, err := q.db.QueryContext(ctx, getProductBySupplierAndTimeAndCategory,
+		arg.SupplierID,
+		arg.Limit,
+		arg.Offset,
+		arg.CategoryID,
+	)
 	if err != nil {
 		return nil, err
 	}

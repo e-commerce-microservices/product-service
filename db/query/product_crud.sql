@@ -25,6 +25,15 @@ SELECT * FROM product;
 
 SELECT * FROM product WHERE category_id = $1 LIMIT $2 OFFSET $3;
 
+-- name: GetProductByCategoryAndTime :many
+SELECT * FROM product WHERE category_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3 ;
+
+-- name: GetProductByCategoryAndPriceInc :many
+SELECT * FROM product WHERE category_id = $1 ORDER BY price LIMIT $2 OFFSET $3;
+
+-- name: GetProductByCategoryAndPriceDesc :many
+SELECT * FROM product WHERE category_id = $1 ORDER BY price DESC LIMIT $2 OFFSET $3 ;
+
 -- name: GetRecommendProduct :many
 
 SELECT * FROM product LIMIT $1 OFFSET $2;
@@ -32,6 +41,35 @@ SELECT * FROM product LIMIT $1 OFFSET $2;
 -- name: GetProductBySupplier :many
 
 SELECT * FROM product WHERE supplier_id = $1 LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndCategory :many
+
+SELECT * FROM product WHERE supplier_id = $1 AND category_id = $4 LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndTime :many
+
+SELECT * FROM product WHERE supplier_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndTimeAndCategory :many
+
+SELECT * FROM product WHERE supplier_id = $1 AND category_id = $4 ORDER BY created_at DESC LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndPriceDesc :many
+
+SELECT * FROM product WHERE supplier_id = $1 ORDER BY price DESC LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndPriceDescAndCategory :many
+
+SELECT * FROM product WHERE supplier_id = $1 AND category_id = $4 ORDER BY price DESC LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndPriceInc :many
+
+SELECT * FROM product WHERE supplier_id = $1 ORDER BY price LIMIT $2 OFFSET $3;
+
+-- name: GetProductBySupplierAndPriceIncAndCategory :many
+
+SELECT * FROM product WHERE supplier_id = $1 AND category_id=$4 ORDER BY price LIMIT $2 OFFSET $3;
+
 
 -- name: UpdateProduct :exec
 
